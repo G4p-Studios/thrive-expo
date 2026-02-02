@@ -1,0 +1,35 @@
+
+import React from 'react';
+import FloatingTabBar from '@/components/FloatingTabBar';
+import { Href } from 'expo-router';
+
+export default function TabLayout() {
+  const tabs = [
+    {
+      name: 'Home',
+      route: '/(tabs)/(home)' as Href,
+      ios_icon_name: 'house.fill',
+      android_material_icon_name: 'home',
+    },
+    {
+      name: 'Explore',
+      route: '/(tabs)/explore' as Href,
+      ios_icon_name: 'magnifyingglass',
+      android_material_icon_name: 'search',
+    },
+    {
+      name: 'Notifications',
+      route: '/(tabs)/notifications' as Href,
+      ios_icon_name: 'bell.fill',
+      android_material_icon_name: 'notifications',
+    },
+    {
+      name: 'Me',
+      route: '/(tabs)/profile' as Href,
+      ios_icon_name: 'person.fill',
+      android_material_icon_name: 'person',
+    },
+  ];
+
+  return <FloatingTabBar tabs={tabs} />;
+}
