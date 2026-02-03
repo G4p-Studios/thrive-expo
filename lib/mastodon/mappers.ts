@@ -23,6 +23,10 @@ export function mapAccount(raw: any, instanceUrl: string = ''): MastodonAccount 
     followingCount: raw.following_count,
     statusesCount: raw.statuses_count,
     url: raw.url,
+    locked: raw.locked,
+    discoverable: raw.discoverable,
+    bot: raw.bot,
+    following: raw.following,
   };
 }
 

@@ -183,6 +183,7 @@ export default function ProfileDetailScreen() {
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: theme.primary }]}
+              onPress={() => router.push('/edit-profile')}
               accessible={true}
               accessibilityRole="button"
               accessibilityLabel="Edit profile"

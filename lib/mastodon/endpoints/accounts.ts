@@ -1,6 +1,6 @@
-import { get, post } from '../client';
+import { get, post, patch } from '../client';
 import { mapAccount, mapPost } from '../mappers';
-import { getInstanceUrl } from '../storage';
+import { getInstanceUrl, setAccountCache } from '../storage';
 import type { MastodonAccount, MastodonPost } from '@/types/mastodon';
 
 /**
@@ -84,4 +84,55 @@ export async function getBookmarks(maxId?: string): Promise<BookmarksResponse> {
   const nextMaxId = posts.length > 0 ? posts[posts.length - 1].id : null;
 
   return { posts, nextMaxId };
+}
+
+export interface UpdateCredentialsData {
+  displayName?: string;
+  note?: string;
+  avatar?: string; // base64 data URI
+  header?: string; // base64 data URI
+  locked?: boolean;
+  discoverable?: boolean;
+  bot?: boolean;
+}
+
+/**
+ * Update the current user's profile/credentials
+ * Supports updating display name, bio, avatar, header, and boolean flags
+ */
+export async function updateCredentials(data: UpdateCredentialsData): Promise<MastodonAccount> {
+  const instanceUrl = await getInstanceUrl() || '';
+
+  // Convert camelCase to snake_case for the API
+  const body: Record<string, unknown> = {};
+
+  if (data.displayName !== undefined) {
+    body.display_name = data.displayName;
+  }
+  if (data.note !== undefined) {
+    body.note = data.note;
+  }
+  if (data.avatar !== undefined) {
+    body.avatar = data.avatar;
+  }
+  if (data.header !== undefined) {
+    body.header = data.header;
+  }
+  if (data.locked !== undefined) {
+    body.locked = data.locked;
+  }
+  if (data.discoverable !== undefined) {
+    body.discoverable = data.discoverable;
+  }
+  if (data.bot !== undefined) {
+    body.bot = data.bot;
+  }
+
+  const raw = await patch<any>('/api/v1/accounts/update_credentials', body);
+  const account = mapAccount(raw, instanceUrl);
+
+  // Update the cached account data
+  await setAccountCache(account);
+
+  return account;
 }

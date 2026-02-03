@@ -131,3 +131,13 @@ export async function post<T>(
 export async function del<T>(endpoint: string): Promise<T> {
   return authenticatedFetch<T>(endpoint, { method: 'DELETE' });
 }
+
+/**
+ * Make an authenticated PATCH request
+ */
+export async function patch<T>(
+  endpoint: string,
+  body?: Record<string, unknown>
+): Promise<T> {
+  return authenticatedFetch<T>(endpoint, { method: 'PATCH', body });
+}

@@ -11,6 +11,10 @@ export interface MastodonAccount {
   followingCount?: number;
   statusesCount?: number;
   url?: string;
+  locked?: boolean;
+  discoverable?: boolean;
+  bot?: boolean;
+  following?: boolean;
 }
 
 export interface MastodonMediaAttachment {
