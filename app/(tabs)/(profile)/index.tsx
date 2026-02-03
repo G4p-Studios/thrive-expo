@@ -11,7 +11,6 @@ import {
   Image,
   ImageSourcePropType,
   ActivityIndicator,
-  Platform,
   Modal,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
@@ -123,7 +122,7 @@ export default function ProfileScreen() {
         <Stack.Screen
           options={{
             title: 'Me',
-            headerShown: false,
+            headerShown: true,
           }}
         />
         <View style={styles.centerContainer}>
@@ -139,12 +138,9 @@ export default function ProfileScreen() {
         <Stack.Screen
           options={{
             title: 'Me',
-            headerShown: false,
+            headerShown: true,
           }}
         />
-        <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Me</Text>
-        </View>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.profileSection}>
             <IconSymbol
@@ -182,13 +178,9 @@ export default function ProfileScreen() {
       <Stack.Screen
         options={{
           title: 'Me',
-          headerShown: false,
+          headerShown: true,
         }}
       />
-
-      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Me</Text>
-      </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Tappable Profile Area */}
@@ -422,16 +414,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 48 : 60,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
   },
   scrollContent: {
     padding: 16,

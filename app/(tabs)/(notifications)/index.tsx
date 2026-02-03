@@ -9,7 +9,6 @@ import {
   useColorScheme,
   RefreshControl,
   ActivityIndicator,
-  Platform,
   Modal,
   Image,
   ImageSourcePropType,
@@ -201,13 +200,28 @@ export default function NotificationsScreen() {
     );
   };
 
+  const headerRight = useCallback(() => {
+    if (notifications.length === 0) return null;
+    return (
+      <TouchableOpacity
+        onPress={() => setClearModalVisible(true)}
+        style={styles.headerButton}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel="Clear all notifications"
+      >
+        <Text style={[styles.clearButtonText, { color: theme.primary }]}>Clear All</Text>
+      </TouchableOpacity>
+    );
+  }, [notifications.length, theme.primary]);
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <Stack.Screen
           options={{
             title: 'Notifications',
-            headerShown: false,
+            headerShown: true,
           }}
         />
         <View style={styles.centerContainer}>
@@ -222,24 +236,10 @@ export default function NotificationsScreen() {
       <Stack.Screen
         options={{
           title: 'Notifications',
-          headerShown: false,
+          headerShown: true,
+          headerRight,
         }}
       />
-
-      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Notifications</Text>
-        {notifications.length > 0 && (
-          <TouchableOpacity
-            onPress={() => setClearModalVisible(true)}
-            style={styles.clearButton}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Clear all notifications"
-          >
-            <Text style={[styles.clearButtonText, { color: theme.primary }]}>Clear All</Text>
-          </TouchableOpacity>
-        )}
-      </View>
 
       <FlatList
         data={notifications}
@@ -358,21 +358,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 48 : 60,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  clearButton: {
+  headerButton: {
     padding: 8,
+    marginRight: 8,
   },
   clearButtonText: {
     fontSize: 16,

@@ -9,7 +9,6 @@ import {
   useColorScheme,
   RefreshControl,
   ActivityIndicator,
-  Platform,
   Modal,
   TextInput,
   Image,
@@ -329,7 +328,7 @@ export default function ExploreScreen() {
         <Stack.Screen
           options={{
             title: 'Explore',
-            headerShown: false,
+            headerShown: true,
           }}
         />
         <View style={styles.centerContainer}>
@@ -344,13 +343,9 @@ export default function ExploreScreen() {
       <Stack.Screen
         options={{
           title: 'Explore',
-          headerShown: false,
+          headerShown: true,
         }}
       />
-
-      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Explore</Text>
-      </View>
 
       {/* Search Bar */}
       <View style={[styles.searchContainer, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
@@ -561,16 +556,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 48 : 60,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
   },
   searchContainer: {
     paddingHorizontal: 16,

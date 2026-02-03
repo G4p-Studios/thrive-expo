@@ -243,13 +243,25 @@ export default function HomeScreen() {
     router.push('/connect-mastodon');
   };
 
+  const headerRight = useCallback(() => (
+    <TouchableOpacity onPress={handleCompose} style={styles.headerButton}>
+      <IconSymbol
+        ios_icon_name="square.and.pencil"
+        android_material_icon_name="edit"
+        size={24}
+        color={theme.primary}
+      />
+    </TouchableOpacity>
+  ), [theme.primary]);
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <Stack.Screen
           options={{
             title: 'Home',
-            headerShown: false,
+            headerShown: true,
+            headerRight,
           }}
         />
         <View style={styles.centerContainer}>
@@ -265,7 +277,7 @@ export default function HomeScreen() {
         <Stack.Screen
           options={{
             title: 'Home',
-            headerShown: false,
+            headerShown: true,
           }}
         />
         <View style={styles.centerContainer}>
@@ -292,21 +304,10 @@ export default function HomeScreen() {
       <Stack.Screen
         options={{
           title: 'Home',
-          headerShown: false,
+          headerShown: true,
+          headerRight,
         }}
       />
-
-      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Home</Text>
-        <TouchableOpacity onPress={handleCompose} style={styles.composeButton}>
-          <IconSymbol
-            ios_icon_name="square.and.pencil"
-            android_material_icon_name="edit"
-            size={24}
-            color={theme.primary}
-          />
-        </TouchableOpacity>
-      </View>
 
       <FlatList
         data={posts}
@@ -396,21 +397,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  composeButton: {
+  headerButton: {
     padding: 8,
+    marginRight: 8,
   },
   emptyContainer: {
     flex: 1,

@@ -9,7 +9,6 @@ import {
   useColorScheme,
   RefreshControl,
   ActivityIndicator,
-  Platform,
   Modal,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
@@ -245,13 +244,25 @@ export default function HomeScreen() {
     router.push('/connect-mastodon');
   };
 
+  const headerRight = useCallback(() => (
+    <TouchableOpacity onPress={handleCompose} style={styles.headerButton}>
+      <IconSymbol
+        ios_icon_name="square.and.pencil"
+        android_material_icon_name="edit"
+        size={24}
+        color={colors.primary}
+      />
+    </TouchableOpacity>
+  ), []);
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: bgColor }]}>
         <Stack.Screen
           options={{
             title: 'Home',
-            headerShown: false,
+            headerShown: true,
+            headerRight,
           }}
         />
         <View style={styles.centerContainer}>
@@ -267,7 +278,7 @@ export default function HomeScreen() {
         <Stack.Screen
           options={{
             title: 'Home',
-            headerShown: false,
+            headerShown: true,
           }}
         />
         <View style={styles.centerContainer}>
@@ -294,21 +305,10 @@ export default function HomeScreen() {
       <Stack.Screen
         options={{
           title: 'Home',
-          headerShown: false,
+          headerShown: true,
+          headerRight,
         }}
       />
-
-      <View style={[styles.header, { backgroundColor: bgColor, borderBottomColor: isDark ? '#333' : '#e0e0e0' }]}>
-        <Text style={[styles.headerTitle, { color: textColor }]}>Home</Text>
-        <TouchableOpacity onPress={handleCompose} style={styles.composeButton}>
-          <IconSymbol
-            ios_icon_name="square.and.pencil"
-            android_material_icon_name="edit"
-            size={24}
-            color={colors.primary}
-          />
-        </TouchableOpacity>
-      </View>
 
       <FlatList
         data={posts}
@@ -398,21 +398,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 48 : 60,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  composeButton: {
+  headerButton: {
     padding: 8,
+    marginRight: 8,
   },
   emptyContainer: {
     flex: 1,
