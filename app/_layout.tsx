@@ -2,6 +2,7 @@
 import { useFonts } from "expo-font";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { SystemBars } from "react-native-edge-to-edge";
 import { StatusBar } from "expo-status-bar";
@@ -35,20 +36,22 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <WidgetProvider>
-        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-          <SystemBars style={colorScheme === "dark" ? "light" : "dark"} />
-          <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="connect-mastodon" />
-            <Stack.Screen name="mastodon-callback" />
-            <Stack.Screen name="+not-found" options={{ headerShown: true }} />
-          </Stack>
-        </ThemeProvider>
-      </WidgetProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <WidgetProvider>
+          <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+            <SystemBars style={colorScheme === "dark" ? "light" : "dark"} />
+            <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="connect-mastodon" />
+              <Stack.Screen name="mastodon-callback" />
+              <Stack.Screen name="+not-found" options={{ headerShown: true }} />
+            </Stack>
+          </ThemeProvider>
+        </WidgetProvider>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }

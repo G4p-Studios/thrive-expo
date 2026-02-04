@@ -7,7 +7,7 @@ export default function NotificationsLayout() {
         name="index"
         options={{
           headerShown: true,
-          title: 'Notifications'
+          title: 'Notifications',
         }}
       />
     </Stack>

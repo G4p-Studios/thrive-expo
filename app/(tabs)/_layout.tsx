@@ -35,7 +35,7 @@ export default function TabLayout() {
 
   return (
     <View style={styles.container}>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack>
         <Stack.Screen name="(home)" options={{ headerShown: false }} />
         <Stack.Screen name="(explore)" options={{ headerShown: false }} />
         <Stack.Screen name="(notifications)" options={{ headerShown: false }} />

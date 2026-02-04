@@ -7,7 +7,7 @@ export default function ExploreLayout() {
         name="index"
         options={{
           headerShown: true,
-          title: 'Explore'
+          title: 'Explore',
         }}
       />
     </Stack>
