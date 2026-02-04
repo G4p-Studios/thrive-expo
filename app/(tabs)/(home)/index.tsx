@@ -43,6 +43,7 @@ export default function HomeScreen() {
   const [replyToUsername, setReplyToUsername] = useState<string | undefined>(undefined);
 
   const isDark = colorScheme === 'dark';
+  const theme = isDark ? colors.dark : colors.light;
   const bgColor = isDark ? colors.backgroundDark : colors.backgroundLight;
   const textColor = isDark ? colors.textDark : colors.textLight;
 
@@ -245,15 +246,22 @@ export default function HomeScreen() {
   };
 
   const headerRight = useCallback(() => (
-    <TouchableOpacity onPress={handleCompose} style={styles.headerButton}>
+    <TouchableOpacity
+      onPress={handleCompose}
+      style={styles.headerButton}
+      accessible={true}
+      accessibilityRole="button"
+      accessibilityLabel="Compose new post"
+      accessibilityHint="Double tap to write a new post"
+    >
       <IconSymbol
         ios_icon_name="square.and.pencil"
         android_material_icon_name="edit"
-        size={24}
-        color={colors.primary}
+        size={28}
+        color={theme.primary}
       />
     </TouchableOpacity>
-  ), []);
+  ), [theme.primary]);
 
   if (loading) {
     return (

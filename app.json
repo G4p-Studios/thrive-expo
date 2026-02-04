@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/images/natively-dark.png",
         "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "package": "com.anonymous.Natively"
     },
     "web": {

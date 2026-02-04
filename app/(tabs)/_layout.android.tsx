@@ -1,43 +1,86 @@
-
 import React from 'react';
-import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
+import { Tabs } from 'expo-router';
 import { useTheme } from '@react-navigation/native';
+import { IconSymbol } from '@/components/IconSymbol';
 
 export default function TabLayout() {
   const theme = useTheme();
 
-  // Define colors for tabs based on theme
   const activeColor = theme.colors.primary;
   const inactiveColor = theme.dark ? '#ADADAD' : '#666666';
 
   return (
-    <NativeTabs
-      tintColor={activeColor}
-      iconColor={{
-        default: inactiveColor,
-        selected: activeColor,
-      }}
-      labelStyle={{
-        default: { color: inactiveColor },
-        selected: { color: activeColor },
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: activeColor,
+        tabBarInactiveTintColor: inactiveColor,
+        tabBarStyle: {
+          backgroundColor: theme.colors.card,
+          borderTopColor: theme.colors.border,
+        },
       }}
     >
-      <NativeTabs.Trigger name="(home)">
-        <Label>Home</Label>
-        <Icon drawable="home" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(explore)">
-        <Label>Explore</Label>
-        <Icon drawable="search" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(notifications)">
-        <Label>Notifications</Label>
-        <Icon drawable="notifications" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(profile)">
-        <Label>Me</Label>
-        <Icon drawable="person" />
-      </NativeTabs.Trigger>
-    </NativeTabs>
+      <Tabs.Screen
+        name="(home)"
+        options={{
+          title: 'Home',
+          tabBarAccessibilityLabel: 'Home, 1 of 4',
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol
+              ios_icon_name="house.fill"
+              android_material_icon_name="home"
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="(explore)"
+        options={{
+          title: 'Explore',
+          tabBarAccessibilityLabel: 'Explore, 2 of 4',
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol
+              ios_icon_name="magnifyingglass"
+              android_material_icon_name="search"
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="(notifications)"
+        options={{
+          title: 'Notifications',
+          tabBarAccessibilityLabel: 'Notifications, 3 of 4',
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol
+              ios_icon_name="bell.fill"
+              android_material_icon_name="notifications"
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="(profile)"
+        options={{
+          title: 'Me',
+          tabBarAccessibilityLabel: 'Me, 4 of 4',
+          tabBarIcon: ({ color, size }) => (
+            <IconSymbol
+              ios_icon_name="person.fill"
+              android_material_icon_name="person"
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }

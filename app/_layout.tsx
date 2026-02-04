@@ -4,7 +4,6 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { WidgetProvider } from "@/contexts/WidgetContext";
-import { SystemBars } from "react-native-edge-to-edge";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
@@ -40,8 +39,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <WidgetProvider>
           <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-            <SystemBars style={colorScheme === "dark" ? "light" : "dark"} />
-            <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+            <StatusBar style={colorScheme === "dark" ? "light" : "dark"} translucent={false} />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(tabs)" />

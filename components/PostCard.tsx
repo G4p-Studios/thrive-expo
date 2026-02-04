@@ -153,7 +153,7 @@ export default function PostCard({ post, onReply, onReblog, onFavourite, onBookm
     <View 
       style={[styles.container, { backgroundColor: theme.card, borderColor: theme.border }]}
       accessible={false}
-      importantForAccessibility="no"
+      importantForAccessibility="auto"
     >
       {/* Boost Indicator */}
       {isBoost && (
@@ -244,10 +244,10 @@ export default function PostCard({ post, onReply, onReblog, onFavourite, onBookm
       )}
 
       {/* Actions - Each button is independently accessible */}
-      <View 
+      <View
         style={styles.actions}
         accessible={false}
-        importantForAccessibility="no-hide-descendants"
+        importantForAccessibility="no"
       >
         <TouchableOpacity 
           style={styles.actionButton}
