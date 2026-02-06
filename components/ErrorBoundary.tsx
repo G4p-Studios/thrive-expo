@@ -22,6 +22,9 @@
 import React, { Component, ReactNode } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 
+// Declare __DEV__ global (React Native global for development mode detection)
+declare const __DEV__: boolean;
+
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;

@@ -3,7 +3,6 @@ import { useFonts } from "expo-font";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { WidgetProvider } from "@/contexts/WidgetContext";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
@@ -37,18 +36,16 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <WidgetProvider>
-          <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-            <StatusBar style={colorScheme === "dark" ? "light" : "dark"} translucent={false} />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="connect-mastodon" />
-              <Stack.Screen name="mastodon-callback" />
-              <Stack.Screen name="+not-found" options={{ headerShown: true }} />
-            </Stack>
-          </ThemeProvider>
-        </WidgetProvider>
+        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+          <StatusBar style={colorScheme === "dark" ? "light" : "dark"} translucent={false} />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="connect-mastodon" />
+            <Stack.Screen name="mastodon-callback" />
+            <Stack.Screen name="+not-found" options={{ headerShown: true }} />
+          </Stack>
+        </ThemeProvider>
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

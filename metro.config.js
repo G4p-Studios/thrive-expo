@@ -5,7 +5,8 @@ const fs = require('fs');
 
 const config = getDefaultConfig(__dirname);
 
-config.resolver.unstable_enablePackageExports = true;
+// Disabled - causes crashes in production builds
+// config.resolver.unstable_enablePackageExports = true;
 
 // Use turborepo to restore the cache when possible
 config.cacheStores = [

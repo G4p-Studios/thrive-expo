@@ -14,11 +14,11 @@ import {
   Modal,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { Stack, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
+import { Stack, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { colors } from '@/styles/commonStyles';
-import { registerApp, exchangeCode, normalizeInstanceUrl } from '@/lib/mastodon';
+import { registerApp, exchangeCode, normalizeInstanceUrl, getRedirectUri } from '@/lib/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 
 const PENDING_INSTANCE_KEY = 'pending_mastodon_instance';
@@ -32,15 +32,15 @@ export default function ConnectMastodonScreen() {
   const colorScheme = useColorScheme();
 
   const isDark = colorScheme === 'dark';
-  const bgColor = isDark ? colors.backgroundDark : colors.backgroundLight;
-  const textColor = isDark ? colors.textDark : colors.textLight;
+  const bgColor = isDark ? colors.dark.background : colors.light.background;
+  const textColor = isDark ? colors.dark.text : colors.light.text;
   const labelColor = isDark ? '#ffffff' : '#000000';
   const descriptionColor = isDark ? '#e5e5e7' : '#3c3c43';
 
   // Setup deep link listener
   useEffect(() => {
     console.log('ConnectMastodonScreen mounted, setting up deep link listener');
-    
+
     // Check for initial URL (if app was opened via deep link)
     Linking.getInitialURL().then((url) => {
       if (url) {
@@ -51,7 +51,7 @@ export default function ConnectMastodonScreen() {
 
     // Listen for deep links while app is running
     const subscription = Linking.addEventListener('url', handleDeepLink);
-    
+
     return () => {
       console.log('Removing deep link listener');
       subscription.remove();
@@ -60,7 +60,7 @@ export default function ConnectMastodonScreen() {
 
   const handleDeepLink = React.useCallback(async ({ url }: { url: string }) => {
     console.log('Deep link received:', url);
-    
+
     if (url.includes('mastodon-callback')) {
       const { queryParams } = Linking.parse(url);
       const code = queryParams?.code as string;
@@ -128,7 +128,7 @@ export default function ConnectMastodonScreen() {
       }
 
       // Step 2: Open Mastodon authorization URL in browser
-      const redirectUri = Linking.createURL('mastodon-callback');
+      const redirectUri = getRedirectUri();
       console.log('Redirect URI:', redirectUri);
 
       const result = await WebBrowser.openAuthSessionAsync(
@@ -222,7 +222,7 @@ export default function ConnectMastodonScreen() {
             ios_icon_name="link.circle.fill"
             android_material_icon_name="link"
             size={80}
-            color={colors.primary}
+            color={colors.light.primary}
             style={{ marginBottom: 24 }}
           />
 
@@ -286,7 +286,7 @@ export default function ConnectMastodonScreen() {
               ios_icon_name="info.circle"
               android_material_icon_name="info"
               size={20}
-              color={colors.primary}
+              color={colors.light.primary}
               style={{ marginRight: 8 }}
             />
             <Text style={[styles.infoText, { color: descriptionColor }]}>
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   connectButton: {
     width: '100%',
     height: 50,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.light.primary,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   modalButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.light.primary,
     paddingHorizontal: 32,
     paddingVertical: 12,
     borderRadius: 8,

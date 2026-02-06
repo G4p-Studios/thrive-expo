@@ -1,5 +1,4 @@
 import * as Linking from 'expo-linking';
-import { Platform } from 'react-native';
 import { mastodonFetch } from './client';
 import { mapAccount } from './mappers';
 import {
@@ -14,15 +13,13 @@ import type { MastodonAccount } from '@/types/mastodon';
 
 const APP_NAME = 'Thrive';
 const APP_WEBSITE = 'https://github.com/thrive-app';
-const SCOPES = 'read write follow push';
+export const SCOPES = 'read write follow push';
 
 /**
  * Get the redirect URI for OAuth callbacks
- * Uses Expo Linking to generate the correct URI for each platform
+ * Uses expo-linking to generate the correct URI for each platform
  */
 export function getRedirectUri(): string {
-  // Use Expo Linking to generate the correct URI for the current environment
-  // This handles both Expo Go (exp://) and standalone builds (Thrive://)
   return Linking.createURL('mastodon-callback');
 }
 

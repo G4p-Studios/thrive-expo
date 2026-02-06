@@ -36,13 +36,13 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "Thrive",
+    "scheme": "thrive",
     "intentFilters": [
       {
         "action": "VIEW",
         "data": [
           {
-            "scheme": "Thrive",
+            "scheme": "thrive",
             "host": "mastodon-callback"
           }
         ],
@@ -56,7 +56,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "9d5728ff-39cf-4a13-b2c9-ee060e515a37"
+      }
+    },
+    "owner": "alexchapman"
   }
 }

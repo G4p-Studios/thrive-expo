@@ -44,8 +44,8 @@ export default function HomeScreen() {
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
-  const bgColor = isDark ? colors.backgroundDark : colors.backgroundLight;
-  const textColor = isDark ? colors.textDark : colors.textLight;
+  const bgColor = isDark ? colors.dark.background : colors.light.background;
+  const textColor = isDark ? colors.dark.text : colors.light.text;
 
   const checkConnection = useCallback(async () => {
     try {
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   connectButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.light.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   modalButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.light.primary,
     paddingHorizontal: 32,
     paddingVertical: 12,
     borderRadius: 8,
