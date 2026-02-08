@@ -1,5 +1,5 @@
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   useColorScheme,
   Image,
   ImageSourcePropType,
+  Share,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { MastodonPost } from '@/types/mastodon';
@@ -90,32 +91,105 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
 
   const timeAgo = formatDate(actualPost.createdAt);
 
-  // Accessibility labels
   const repliesCount = actualPost.repliesCount || 0;
-  const replyAccessibilityLabel = `Reply to ${displayName}'s post. ${repliesCount} replies`;
-  const reblogAccessibilityLabel = reblogged 
-    ? `Unboost. Currently boosted. ${reblogsCount} boosts` 
-    : `Boost ${displayName}'s post. ${reblogsCount} boosts`;
-  const favouriteAccessibilityLabel = favourited
-    ? `Unlike. Currently liked. ${favouritesCount} likes`
-    : `Like ${displayName}'s post. ${favouritesCount} likes`;
-  const bookmarkAccessibilityLabel = bookmarked
-    ? `Remove bookmark. Currently bookmarked`
-    : `Bookmark ${displayName}'s post`;
+
+  const handleShare = useCallback(() => {
+    const url = actualPost.url || actualPost.uri;
+    if (url) {
+      Share.share({ url, message: url });
+    }
+  }, [actualPost.url, actualPost.uri]);
+
+  // Combined accessibility label for the entire post
+  const accessibilityLabel = useMemo(() => {
+    const parts: string[] = [];
+
+    if (isBoost) {
+      parts.push(`${boosterDisplayName} boosted`);
+    }
+
+    parts.push(`${displayName}, @${username}, ${timeAgo}`);
+
+    parts.push(displayContent);
+
+    // Media descriptions
+    const media = actualPost.mediaAttachments;
+    if (media && media.length > 0) {
+      const descs = media.slice(0, 4).map((m, i) => m.description || `Image ${i + 1}`);
+      parts.push(`${media.length} attachment${media.length > 1 ? 's' : ''}: ${descs.join(', ')}`);
+    }
+
+    // Interaction counts
+    const counts: string[] = [];
+    if (repliesCount > 0) counts.push(`${repliesCount} ${repliesCount === 1 ? 'reply' : 'replies'}`);
+    if (reblogsCount > 0) counts.push(`${reblogsCount} ${reblogsCount === 1 ? 'boost' : 'boosts'}`);
+    if (favouritesCount > 0) counts.push(`${favouritesCount} ${favouritesCount === 1 ? 'like' : 'likes'}`);
+    if (counts.length > 0) parts.push(counts.join(', '));
+
+    // Current user state
+    const states: string[] = [];
+    if (favourited) states.push('liked');
+    if (reblogged) states.push('boosted');
+    if (bookmarked) states.push('bookmarked');
+    if (states.length > 0) parts.push(`You have ${states.join(', ')} this post`);
+
+    return parts.join('. ');
+  }, [isBoost, boosterDisplayName, displayName, username, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked]);
+
+  // Accessibility actions with dynamic labels
+  const accessibilityActions = useMemo(() => {
+    const actions = [
+      { name: 'activate', label: 'Open post' },
+      { name: 'reply', label: 'Reply' },
+      { name: 'boost', label: reblogged ? 'Unboost' : 'Boost' },
+      { name: 'like', label: favourited ? 'Unlike' : 'Like' },
+    ];
+    if (onBookmark) {
+      actions.push({ name: 'bookmark', label: bookmarked ? 'Remove bookmark' : 'Bookmark' });
+    }
+    actions.push({ name: 'share', label: 'Share' });
+    return actions;
+  }, [reblogged, favourited, bookmarked, onBookmark]);
+
+  const onAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
+    switch (event.nativeEvent.actionName) {
+      case 'activate':
+        // Future: navigate to post detail
+        break;
+      case 'reply':
+        handleReply();
+        break;
+      case 'boost':
+        handleReblog();
+        break;
+      case 'like':
+        handleFavourite();
+        break;
+      case 'bookmark':
+        handleBookmark();
+        break;
+      case 'share':
+        handleShare();
+        break;
+    }
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare]);
 
   return (
-    <View 
+    <View
       style={[styles.container, { backgroundColor: theme.card, borderColor: theme.border }]}
-      accessible={false}
-      importantForAccessibility="auto"
+      accessible={true}
+      accessibilityRole="button"
+      importantForAccessibility="yes"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
     >
       {/* Boost Indicator */}
       {isBoost && (
-        <View 
+        <View
           style={styles.boostIndicator}
-          accessible={true}
-          accessibilityRole="text"
-          accessibilityLabel={`${boosterDisplayName} boosted this post`}
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
         >
           <IconSymbol
             ios_icon_name="arrow.2.squarepath"
@@ -124,7 +198,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
             color={theme.success}
             accessible={false}
           />
-          <Text 
+          <Text
             style={[styles.boostText, { color: theme.success }]}
             accessible={false}
           >
@@ -134,29 +208,28 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
       )}
 
       {/* Header */}
-      <View 
+      <View
         style={styles.header}
-        accessible={true}
-        accessibilityRole="header"
-        accessibilityLabel={`Post by ${displayName}, ${username}. Posted ${timeAgo}`}
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
       >
-        <Image 
+        <Image
           source={resolveImageSource(actualPost.account.avatar)}
           style={styles.avatar}
           accessible={false}
           importantForAccessibility="no"
         />
         <View style={styles.headerText}>
-          <Text 
-            style={[styles.displayName, { color: theme.text }]} 
+          <Text
+            style={[styles.displayName, { color: theme.text }]}
             numberOfLines={1}
             accessible={false}
             importantForAccessibility="no"
           >
             {displayName}
           </Text>
-          <Text 
-            style={[styles.username, { color: theme.textSecondary }]} 
+          <Text
+            style={[styles.username, { color: theme.textSecondary }]}
             numberOfLines={1}
             accessible={false}
             importantForAccessibility="no"
@@ -164,7 +237,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
             @{username}
           </Text>
         </View>
-        <Text 
+        <Text
           style={[styles.timestamp, { color: theme.textSecondary }]}
           accessible={false}
           importantForAccessibility="no"
@@ -174,43 +247,38 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
       </View>
 
       {/* Content */}
-      <Text 
+      <Text
         style={[styles.content, { color: theme.text }]}
-        accessible={true}
-        accessibilityRole="text"
-        accessibilityLabel={`Post content: ${displayContent}`}
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
       >
         {displayContent}
       </Text>
 
       {/* Media attachments */}
       {actualPost.mediaAttachments && actualPost.mediaAttachments.length > 0 && (
-        <View style={styles.mediaContainer}>
+        <View style={styles.mediaContainer} importantForAccessibility="no-hide-descendants">
           {actualPost.mediaAttachments.slice(0, 4).map((media, index) => (
             <Image
               key={index}
               source={resolveImageSource(media.url)}
               style={styles.mediaImage}
-              accessibilityLabel={media.description || `Image ${index + 1}`}
+              accessible={false}
             />
           ))}
         </View>
       )}
 
-      {/* Actions - Each button is independently accessible */}
+      {/* Actions - hidden from accessibility tree, visual only */}
       <View
         style={styles.actions}
         accessible={false}
-        importantForAccessibility="no"
+        importantForAccessibility="no-hide-descendants"
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionButton}
           onPress={handleReply}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={replyAccessibilityLabel}
-          accessibilityHint="Double tap to reply to this post"
-          accessibilityState={{ disabled: false }}
+          accessible={false}
         >
           <IconSymbol
             ios_icon_name="bubble.left"
@@ -219,7 +287,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
             color={theme.textSecondary}
             accessible={false}
           />
-          <Text 
+          <Text
             style={[styles.actionCount, { color: theme.textSecondary }]}
             accessible={false}
           >
@@ -227,14 +295,10 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionButton}
           onPress={handleReblog}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={reblogAccessibilityLabel}
-          accessibilityHint="Double tap to boost this post"
-          accessibilityState={{ disabled: false, checked: reblogged }}
+          accessible={false}
         >
           <IconSymbol
             ios_icon_name="arrow.2.squarepath"
@@ -243,7 +307,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
             color={reblogged ? theme.success : theme.textSecondary}
             accessible={false}
           />
-          <Text 
+          <Text
             style={[styles.actionCount, { color: reblogged ? theme.success : theme.textSecondary }]}
             accessible={false}
           >
@@ -251,14 +315,10 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionButton}
           onPress={handleFavourite}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={favouriteAccessibilityLabel}
-          accessibilityHint="Double tap to like this post"
-          accessibilityState={{ disabled: false, checked: favourited }}
+          accessible={false}
         >
           <IconSymbol
             ios_icon_name={favourited ? "heart.fill" : "heart"}
@@ -267,7 +327,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
             color={favourited ? theme.error : theme.textSecondary}
             accessible={false}
           />
-          <Text 
+          <Text
             style={[styles.actionCount, { color: favourited ? theme.error : theme.textSecondary }]}
             accessible={false}
           >
@@ -276,14 +336,10 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
         </TouchableOpacity>
 
         {onBookmark && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.actionButton}
             onPress={handleBookmark}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel={bookmarkAccessibilityLabel}
-            accessibilityHint="Double tap to bookmark this post"
-            accessibilityState={{ disabled: false, checked: bookmarked }}
+            accessible={false}
           >
             <IconSymbol
               ios_icon_name={bookmarked ? "bookmark.fill" : "bookmark"}
@@ -295,13 +351,10 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionButton}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel="Share post"
-          accessibilityHint="Double tap to share this post"
-          accessibilityState={{ disabled: false }}
+          onPress={handleShare}
+          accessible={false}
         >
           <IconSymbol
             ios_icon_name="square.and.arrow.up"
@@ -329,7 +382,8 @@ export default memo(PostCard, (prevProps, nextProps) => {
     prevPost.bookmarked === nextPost.bookmarked &&
     prevPost.reblogsCount === nextPost.reblogsCount &&
     prevPost.favouritesCount === nextPost.favouritesCount &&
-    prevPost.content === nextPost.content
+    prevPost.content === nextPost.content &&
+    prevPost.repliesCount === nextPost.repliesCount
   );
 });
 
