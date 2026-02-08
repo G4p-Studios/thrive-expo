@@ -14,7 +14,7 @@ import {
 import { colors } from '@/styles/commonStyles';
 import ComposeModal from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import {
@@ -41,6 +41,8 @@ export default function HomeScreen() {
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [replyToPostId, setReplyToPostId] = useState<string | undefined>(undefined);
   const [replyToUsername, setReplyToUsername] = useState<string | undefined>(undefined);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
@@ -76,12 +78,17 @@ export default function HomeScreen() {
 
   const loadTimeline = useCallback(async (maxId?: string) => {
     try {
-      console.log('Loading timeline', maxId ? `with maxId: ${maxId}` : '');
       if (!maxId) {
         setLoading(true);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
       }
       const response = await getHomeTimeline(maxId);
-      console.log(`Loaded ${response.posts.length} posts from timeline`);
+
+      if (response.posts.length === 0) {
+        setHasMore(false);
+      }
 
       if (maxId) {
         setPosts((prev) => [...prev, ...response.posts]);
@@ -95,6 +102,7 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   }, []);
 
@@ -127,20 +135,19 @@ export default function HomeScreen() {
     }
   };
 
-  const handleReply = (postId: string) => {
-    console.log('User tapped reply on post:', postId);
-    const post = posts.find(p => p.id === postId);
-    if (post) {
-      console.log('Opening reply composer for:', post.account.username);
-      setReplyToPostId(postId);
-      setReplyToUsername(post.account.username);
-      setComposeVisible(true);
-    }
-  };
+  const handleReply = useCallback((postId: string) => {
+    setPosts((currentPosts) => {
+      const post = currentPosts.find(p => p.id === postId);
+      if (post) {
+        setReplyToPostId(postId);
+        setReplyToUsername(post.account.username);
+        setComposeVisible(true);
+      }
+      return currentPosts;
+    });
+  }, []);
 
-  const handleReblog = async (postId: string, currentState: boolean) => {
-    console.log(`User tapped ${currentState ? 'unreblog' : 'reblog'} on post:`, postId);
-
+  const handleReblog = useCallback(async (postId: string, currentState: boolean) => {
     // Optimistic update
     setPosts((prev) =>
       prev.map((p) =>
@@ -156,7 +163,6 @@ export default function HomeScreen() {
       } else {
         await reblog(postId);
       }
-      console.log('Reblog action completed');
     } catch (error: any) {
       console.error('Failed to reblog:', error);
       // Rollback
@@ -170,11 +176,9 @@ export default function HomeScreen() {
       setErrorMessage(error.message || 'Failed to reblog');
       setErrorModalVisible(true);
     }
-  };
+  }, []);
 
-  const handleFavourite = async (postId: string, currentState: boolean) => {
-    console.log(`User tapped ${currentState ? 'unfavourite' : 'favourite'} on post:`, postId);
-
+  const handleFavourite = useCallback(async (postId: string, currentState: boolean) => {
     // Optimistic update
     setPosts((prev) =>
       prev.map((p) =>
@@ -190,7 +194,6 @@ export default function HomeScreen() {
       } else {
         await favourite(postId);
       }
-      console.log('Favourite action completed');
     } catch (error: any) {
       console.error('Failed to favourite:', error);
       // Rollback
@@ -204,11 +207,9 @@ export default function HomeScreen() {
       setErrorMessage(error.message || 'Failed to favourite');
       setErrorModalVisible(true);
     }
-  };
+  }, []);
 
-  const handleBookmark = async (postId: string, currentState: boolean) => {
-    console.log(`User tapped ${currentState ? 'unbookmark' : 'bookmark'} on post:`, postId);
-
+  const handleBookmark = useCallback(async (postId: string, currentState: boolean) => {
     // Optimistic update
     setPosts((prev) =>
       prev.map((p) =>
@@ -224,7 +225,6 @@ export default function HomeScreen() {
       } else {
         await bookmark(postId);
       }
-      console.log('Bookmark action completed');
     } catch (error: any) {
       console.error('Failed to bookmark:', error);
       // Rollback
@@ -238,7 +238,7 @@ export default function HomeScreen() {
       setErrorMessage(error.message || 'Failed to bookmark');
       setErrorModalVisible(true);
     }
-  };
+  }, []);
 
   const handleConnect = () => {
     console.log('User tapped connect Mastodon button');
@@ -262,6 +262,49 @@ export default function HomeScreen() {
       />
     </TouchableOpacity>
   ), [theme.primary]);
+
+  // Memoized FlatList helpers for performance
+  const keyExtractor = useCallback((item: MastodonPost) => item.id, []);
+
+  const renderItem = useCallback(({ item }: { item: MastodonPost }) => (
+    <PostCard
+      post={item}
+      onReply={handleReply}
+      onReblog={handleReblog}
+      onFavourite={handleFavourite}
+      onBookmark={handleBookmark}
+    />
+  ), [handleReply, handleReblog, handleFavourite, handleBookmark]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadTimeline();
+  }, [loadTimeline]);
+
+  const emptyComponent = useMemo(() => (
+    <View style={styles.emptyContainer}>
+      <Text style={[styles.emptyText, { color: textColor }]}>
+        No posts yet. Follow some accounts to see their posts here!
+      </Text>
+    </View>
+  ), [textColor]);
+
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMore || posts.length === 0) return;
+    const lastPost = posts[posts.length - 1];
+    if (lastPost) {
+      loadTimeline(lastPost.id);
+    }
+  }, [loadingMore, hasMore, posts, loadTimeline]);
+
+  const footerComponent = useMemo(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={textColor} />
+      </View>
+    );
+  }, [loadingMore, textColor]);
 
   if (loading) {
     return (
@@ -320,35 +363,24 @@ export default function HomeScreen() {
 
       <FlatList
         data={posts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <PostCard
-            post={item}
-            onReply={handleReply}
-            onReblog={handleReblog}
-            onFavourite={handleFavourite}
-            onBookmark={handleBookmark}
-          />
-        )}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              console.log('User pulled to refresh');
-              setRefreshing(true);
-              loadTimeline();
-            }}
+            onRefresh={handleRefresh}
             tintColor={textColor}
           />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: textColor }]}>
-              No posts yet. Follow some accounts to see their posts here!
-            </Text>
-          </View>
-        }
+        ListEmptyComponent={emptyComponent}
+        ListFooterComponent={footerComponent}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
         contentContainerStyle={posts.length === 0 ? styles.emptyListContent : undefined}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        initialNumToRender={10}
       />
 
       <ComposeModal
@@ -418,6 +450,10 @@ const styles = StyleSheet.create({
   },
   emptyListContent: {
     flexGrow: 1,
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
   emptyText: {
     fontSize: 16,

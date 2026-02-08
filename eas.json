@@ -8,6 +8,7 @@
     "preview": {
       "distribution": "internal",
       "autoIncrement": true,
+      "channel": "preview",
       "android": {
         "buildType": "apk"
       }

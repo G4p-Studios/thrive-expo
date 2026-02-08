@@ -62,6 +62,12 @@
         "projectId": "9d5728ff-39cf-4a13-b2c9-ee060e515a37"
       }
     },
-    "owner": "alexchapman"
+    "owner": "alexchapman",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9d5728ff-39cf-4a13-b2c9-ee060e515a37"
+    }
   }
 }

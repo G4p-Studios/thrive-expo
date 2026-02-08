@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { memo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   useColorScheme,
   Image,
   ImageSourcePropType,
-  AccessibilityInfo,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { MastodonPost } from '@/types/mastodon';
@@ -29,84 +28,39 @@ interface PostCardProps {
   onBookmark?: (postId: string, currentState: boolean) => void;
 }
 
-export default function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCardProps) {
+function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCardProps) {
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? colors.dark : colors.light;
-  
+
   // Check if this is a boosted post
   const isBoost = !!post.reblog;
   const actualPost = isBoost ? post.reblog! : post;
   const booster = isBoost ? post.account : null;
-  
-  const [reblogged, setReblogged] = useState(post.reblogged);
-  const [favourited, setFavourited] = useState(post.favourited);
-  const [bookmarked, setBookmarked] = useState(post.bookmarked || false);
-  const [reblogsCount, setReblogsCount] = useState(post.reblogsCount || 0);
-  const [favouritesCount, setFavouritesCount] = useState(post.favouritesCount || 0);
 
-  const handleReply = () => {
-    console.log('User tapped reply button for post:', post.id);
+  // Use values directly from post prop (parent handles optimistic updates)
+  const reblogged = post.reblogged;
+  const favourited = post.favourited;
+  const bookmarked = post.bookmarked || false;
+  const reblogsCount = post.reblogsCount || 0;
+  const favouritesCount = post.favouritesCount || 0;
+
+  const handleReply = useCallback(() => {
     onReply(post.id);
-  };
+  }, [onReply, post.id]);
 
-  const handleReblog = async () => {
-    console.log('User tapped reblog button for post:', post.id, 'current state:', reblogged);
-    const previousState = reblogged;
-    const previousCount = reblogsCount;
-    
-    // Optimistic update
-    const newState = !reblogged;
-    setReblogged(newState);
-    setReblogsCount(prev => newState ? prev + 1 : prev - 1);
-    
-    try {
-      await onReblog(post.id, previousState);
-    } catch (error) {
-      // Revert on error
-      console.error('Failed to toggle reblog, reverting:', error);
-      setReblogged(previousState);
-      setReblogsCount(previousCount);
-    }
-  };
+  const handleReblog = useCallback(() => {
+    onReblog(post.id, reblogged || false);
+  }, [onReblog, post.id, reblogged]);
 
-  const handleFavourite = async () => {
-    console.log('User tapped favourite button for post:', post.id, 'current state:', favourited);
-    const previousState = favourited;
-    const previousCount = favouritesCount;
-    
-    // Optimistic update
-    const newState = !favourited;
-    setFavourited(newState);
-    setFavouritesCount(prev => newState ? prev + 1 : prev - 1);
-    
-    try {
-      await onFavourite(post.id, previousState);
-    } catch (error) {
-      // Revert on error
-      console.error('Failed to toggle favourite, reverting:', error);
-      setFavourited(previousState);
-      setFavouritesCount(previousCount);
-    }
-  };
+  const handleFavourite = useCallback(() => {
+    onFavourite(post.id, favourited || false);
+  }, [onFavourite, post.id, favourited]);
 
-  const handleBookmark = async () => {
-    if (!onBookmark) return;
-    
-    console.log('User tapped bookmark button for post:', post.id, 'current state:', bookmarked);
-    const previousState = bookmarked;
-    
-    // Optimistic update
-    const newState = !bookmarked;
-    setBookmarked(newState);
-    
-    try {
-      await onBookmark(post.id, previousState);
-    } catch (error) {
-      // Revert on error
-      console.error('Failed to toggle bookmark, reverting:', error);
-      setBookmarked(previousState);
+  const handleBookmark = useCallback(() => {
+    if (onBookmark) {
+      onBookmark(post.id, bookmarked);
     }
-  };
+  }, [onBookmark, post.id, bookmarked]);
 
   // Strip HTML tags from content for display
   const stripHtml = (html: string) => {
@@ -361,6 +315,23 @@ export default function PostCard({ post, onReply, onReblog, onFavourite, onBookm
     </View>
   );
 }
+
+// Memoize to prevent re-renders when parent state changes but this post hasn't
+export default memo(PostCard, (prevProps, nextProps) => {
+  const prevPost = prevProps.post;
+  const nextPost = nextProps.post;
+
+  // Only re-render if the post data actually changed
+  return (
+    prevPost.id === nextPost.id &&
+    prevPost.reblogged === nextPost.reblogged &&
+    prevPost.favourited === nextPost.favourited &&
+    prevPost.bookmarked === nextPost.bookmarked &&
+    prevPost.reblogsCount === nextPost.reblogsCount &&
+    prevPost.favouritesCount === nextPost.favouritesCount &&
+    prevPost.content === nextPost.content
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
