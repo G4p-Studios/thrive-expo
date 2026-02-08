@@ -9,6 +9,7 @@ import {
   Image,
   ImageSourcePropType,
   Share,
+  AccessibilityInfo,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { MastodonPost } from '@/types/mastodon';
@@ -139,7 +140,6 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
   // Accessibility actions with dynamic labels
   const accessibilityActions = useMemo(() => {
     const actions = [
-      { name: 'activate', label: 'Open post' },
       { name: 'reply', label: 'Reply' },
       { name: 'boost', label: reblogged ? 'Unboost' : 'Boost' },
       { name: 'like', label: favourited ? 'Unlike' : 'Like' },
@@ -153,26 +153,26 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
 
   const onAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
     switch (event.nativeEvent.actionName) {
-      case 'activate':
-        // Future: navigate to post detail
-        break;
       case 'reply':
         handleReply();
         break;
       case 'boost':
         handleReblog();
+        AccessibilityInfo.announceForAccessibility(reblogged ? 'Unboosted' : 'Boosted');
         break;
       case 'like':
         handleFavourite();
+        AccessibilityInfo.announceForAccessibility(favourited ? 'Unliked' : 'Liked');
         break;
       case 'bookmark':
         handleBookmark();
+        AccessibilityInfo.announceForAccessibility(bookmarked ? 'Bookmark removed' : 'Bookmarked');
         break;
       case 'share':
         handleShare();
         break;
     }
-  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare]);
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, reblogged, favourited, bookmarked]);
 
   return (
     <View
