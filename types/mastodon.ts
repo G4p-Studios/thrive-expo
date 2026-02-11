@@ -18,9 +18,12 @@ export interface MastodonAccount {
 }
 
 export interface MastodonMediaAttachment {
+  id: string;
   url: string;
   type: string;
   description?: string;
+  previewUrl?: string;
+  blurhash?: string;
 }
 
 export interface MastodonPost {

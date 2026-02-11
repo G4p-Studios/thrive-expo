@@ -2,7 +2,7 @@
   "expo": {
     "name": "Thrive",
     "slug": "Thrive",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
     "userInterfaceStyle": "automatic",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.galaxia.thrive",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,7 +25,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": false,
-      "package": "com.anonymous.Natively"
+      "package": "com.galaxia.thrive"
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",

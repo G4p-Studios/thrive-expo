@@ -27,6 +27,7 @@ export {
   NotAuthenticatedError,
   authenticatedFetch,
   mastodonFetch,
+  uploadFormData,
 } from './client';
 
 // Endpoints
@@ -36,3 +37,4 @@ export * from './endpoints/accounts';
 export * from './endpoints/notifications';
 export * from './endpoints/lists';
 export * from './endpoints/search';
+export * from './endpoints/media';

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -10,14 +10,14 @@ import {
   useColorScheme,
   RefreshControl,
   ActivityIndicator,
-  Platform,
   Modal,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import ComposeModal from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
 import {
-  getListTimeline,
+  getPost,
+  getPostContext,
   createPost,
   favourite,
   unfavourite,
@@ -29,14 +29,17 @@ import {
 import { MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 
-export default function ListTimelineScreen() {
+interface ThreadItem {
+  post: MastodonPost;
+  isMain: boolean;
+}
+
+export default function PostDetailScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const listId = params.id as string;
-  const listTitle = params.title as string || 'List';
-  
-  const [posts, setPosts] = useState<MastodonPost[]>([]);
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  const [threadItems, setThreadItems] = useState<ThreadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [composeVisible, setComposeVisible] = useState(false);
@@ -48,173 +51,152 @@ export default function ListTimelineScreen() {
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
 
-  useEffect(() => {
-    console.log('ListTimelineScreen mounted for list:', listId, listTitle);
-    loadTimeline();
-  }, [listId]);
-
-  const loadTimeline = useCallback(async (maxId?: string) => {
+  const loadThread = useCallback(async () => {
+    if (!id) return;
     try {
-      console.log('Loading list timeline', maxId ? `with maxId: ${maxId}` : '');
-      if (!maxId) {
-        setLoading(true);
-      }
-      const response = await getListTimeline(listId, maxId);
-      console.log(`Loaded ${response.posts.length} posts from list timeline`);
+      const [post, context] = await Promise.all([
+        getPost(id),
+        getPostContext(id),
+      ]);
 
-      if (maxId) {
-        setPosts((prev) => [...prev, ...response.posts]);
-      } else {
-        setPosts(response.posts);
-      }
+      const items: ThreadItem[] = [
+        ...context.ancestors.map(p => ({ post: p, isMain: false })),
+        { post, isMain: true },
+        ...context.descendants.map(p => ({ post: p, isMain: false })),
+      ];
+      setThreadItems(items);
     } catch (error: any) {
-      console.error('Failed to load list timeline:', error);
-      setErrorMessage(error.message || 'Failed to load timeline');
+      setErrorMessage(error.message || 'Failed to load post');
       setErrorModalVisible(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [listId]);
+  }, [id]);
 
-  const handleReply = (postId: string) => {
-    console.log('User tapped reply on post:', postId);
-    const post = posts.find(p => p.id === postId);
-    if (post) {
-      console.log('Opening reply composer for:', post.account.username);
+  useEffect(() => {
+    loadThread();
+  }, [loadThread]);
+
+  const updatePost = useCallback((postId: string, updater: (p: MastodonPost) => MastodonPost) => {
+    setThreadItems(prev =>
+      prev.map(item =>
+        item.post.id === postId ? { ...item, post: updater(item.post) } : item
+      )
+    );
+  }, []);
+
+  const handleReply = useCallback((postId: string) => {
+    const item = threadItems.find(i => i.post.id === postId);
+    if (item) {
       setReplyToPostId(postId);
-      setReplyToUsername(post.account.username);
+      setReplyToUsername(item.post.account.username);
       setComposeVisible(true);
     }
-  };
+  }, [threadItems]);
 
   const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
     try {
-      console.log('Submitting reply:', content, 'to post:', replyToPostId);
-
-      if (replyToPostId) {
-        await createPost(content, { inReplyToId: replyToPostId, mediaIds });
-        console.log('Reply submitted successfully');
-      }
-
+      await createPost(content, {
+        inReplyToId: replyToPostId,
+        mediaIds,
+      });
       setComposeVisible(false);
       setReplyToPostId(undefined);
       setReplyToUsername(undefined);
+      loadThread();
     } catch (error: any) {
-      console.error('Failed to submit reply:', error);
       setErrorMessage(error.message || 'Failed to post');
       setErrorModalVisible(true);
     }
   };
 
-  const handleReblog = async (postId: string, currentState: boolean) => {
-    console.log(`User tapped ${currentState ? 'unreblog' : 'reblog'} on post:`, postId);
-
-    // Optimistic update
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, reblogged: !currentState, reblogsCount: (p.reblogsCount || 0) + (currentState ? -1 : 1) }
-          : p
-      )
-    );
-
+  const handleReblog = useCallback(async (postId: string, currentState: boolean) => {
+    updatePost(postId, p => ({
+      ...p,
+      reblogged: !currentState,
+      reblogsCount: (p.reblogsCount || 0) + (currentState ? -1 : 1),
+    }));
     try {
       if (currentState) {
         await unreblog(postId);
       } else {
         await reblog(postId);
       }
-      console.log('Reblog action completed');
     } catch (error: any) {
-      console.error('Failed to reblog:', error);
-      // Rollback
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId
-            ? { ...p, reblogged: currentState, reblogsCount: (p.reblogsCount || 0) + (currentState ? 1 : -1) }
-            : p
-        )
-      );
+      updatePost(postId, p => ({
+        ...p,
+        reblogged: currentState,
+        reblogsCount: (p.reblogsCount || 0) + (currentState ? 1 : -1),
+      }));
       setErrorMessage(error.message || 'Failed to reblog');
       setErrorModalVisible(true);
     }
-  };
+  }, [updatePost]);
 
-  const handleFavourite = async (postId: string, currentState: boolean) => {
-    console.log(`User tapped ${currentState ? 'unfavourite' : 'favourite'} on post:`, postId);
-
-    // Optimistic update
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, favourited: !currentState, favouritesCount: (p.favouritesCount || 0) + (currentState ? -1 : 1) }
-          : p
-      )
-    );
-
+  const handleFavourite = useCallback(async (postId: string, currentState: boolean) => {
+    updatePost(postId, p => ({
+      ...p,
+      favourited: !currentState,
+      favouritesCount: (p.favouritesCount || 0) + (currentState ? -1 : 1),
+    }));
     try {
       if (currentState) {
         await unfavourite(postId);
       } else {
         await favourite(postId);
       }
-      console.log('Favourite action completed');
     } catch (error: any) {
-      console.error('Failed to favourite:', error);
-      // Rollback
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId
-            ? { ...p, favourited: currentState, favouritesCount: (p.favouritesCount || 0) + (currentState ? 1 : -1) }
-            : p
-        )
-      );
+      updatePost(postId, p => ({
+        ...p,
+        favourited: currentState,
+        favouritesCount: (p.favouritesCount || 0) + (currentState ? 1 : -1),
+      }));
       setErrorMessage(error.message || 'Failed to favourite');
       setErrorModalVisible(true);
     }
-  };
+  }, [updatePost]);
 
-  const handleBookmark = async (postId: string, currentState: boolean) => {
-    console.log(`User tapped ${currentState ? 'unbookmark' : 'bookmark'} on post:`, postId);
-
-    // Optimistic update
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, bookmarked: !currentState }
-          : p
-      )
-    );
-
+  const handleBookmark = useCallback(async (postId: string, currentState: boolean) => {
+    updatePost(postId, p => ({ ...p, bookmarked: !currentState }));
     try {
       if (currentState) {
         await unbookmark(postId);
       } else {
         await bookmark(postId);
       }
-      console.log('Bookmark action completed');
     } catch (error: any) {
-      console.error('Failed to bookmark:', error);
-      // Rollback
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === postId
-            ? { ...p, bookmarked: currentState }
-            : p
-        )
-      );
+      updatePost(postId, p => ({ ...p, bookmarked: currentState }));
       setErrorMessage(error.message || 'Failed to bookmark');
       setErrorModalVisible(true);
     }
-  };
+  }, [updatePost]);
+
+  const handlePostPress = useCallback((postId: string) => {
+    if (postId !== id) {
+      router.push(`/post/${postId}` as any);
+    }
+  }, [id, router]);
+
+  const renderItem = useCallback(({ item }: { item: ThreadItem }) => (
+    <View style={item.isMain ? [styles.mainPost, { borderLeftColor: theme.primary }] : undefined}>
+      <PostCard
+        post={item.post}
+        onReply={handleReply}
+        onReblog={handleReblog}
+        onFavourite={handleFavourite}
+        onBookmark={handleBookmark}
+        onPress={handlePostPress}
+      />
+    </View>
+  ), [handleReply, handleReblog, handleFavourite, handleBookmark, handlePostPress, theme.primary]);
 
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <Stack.Screen
           options={{
-            title: listTitle,
+            title: 'Post',
             headerShown: true,
             headerBackTitle: 'Back',
           }}
@@ -230,50 +212,34 @@ export default function ListTimelineScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Stack.Screen
         options={{
-          title: listTitle,
+          title: 'Post',
           headerShown: true,
           headerBackTitle: 'Back',
         }}
       />
 
       <FlatList
-        data={posts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <PostCard
-            post={item}
-            onReply={handleReply}
-            onReblog={handleReblog}
-            onFavourite={handleFavourite}
-            onBookmark={handleBookmark}
-          />
-        )}
+        data={threadItems}
+        keyExtractor={(item) => item.post.id}
+        renderItem={renderItem}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => {
-              console.log('User pulled to refresh');
               setRefreshing(true);
-              loadTimeline();
+              loadThread();
             }}
             tintColor={theme.text}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <IconSymbol
-              ios_icon_name="list.bullet"
-              android_material_icon_name="list"
-              size={64}
-              color={theme.textSecondary}
-              style={{ marginBottom: 16 }}
-            />
             <Text style={[styles.emptyText, { color: theme.text }]}>
-              No posts in this list yet. Add accounts to this list to see their posts here!
+              Post not found.
             </Text>
           </View>
         }
-        contentContainerStyle={posts.length === 0 ? styles.emptyListContent : undefined}
+        contentContainerStyle={threadItems.length === 0 ? styles.emptyListContent : undefined}
       />
 
       <ComposeModal
@@ -314,7 +280,6 @@ export default function ListTimelineScreen() {
               accessible={true}
               accessibilityRole="button"
               accessibilityLabel="OK"
-              accessibilityHint="Double tap to close"
             >
               <Text style={styles.modalButtonText}>OK</Text>
             </TouchableOpacity>
@@ -334,6 +299,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+  },
+  mainPost: {
+    borderLeftWidth: 3,
   },
   emptyContainer: {
     flex: 1,

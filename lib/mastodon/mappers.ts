@@ -35,9 +35,12 @@ export function mapAccount(raw: any, instanceUrl: string = ''): MastodonAccount 
  */
 export function mapMediaAttachment(raw: any): MastodonMediaAttachment {
   return {
+    id: raw.id,
     url: raw.url,
     type: raw.type,
     description: raw.description,
+    previewUrl: raw.preview_url,
+    blurhash: raw.blurhash,
   };
 }
 

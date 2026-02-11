@@ -43,6 +43,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="connect-mastodon" />
             <Stack.Screen name="mastodon-callback" />
+            <Stack.Screen name="post/[id]" options={{ headerShown: true }} />
             <Stack.Screen name="+not-found" options={{ headerShown: true }} />
           </Stack>
         </ThemeProvider>

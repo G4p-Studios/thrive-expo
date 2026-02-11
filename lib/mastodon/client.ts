@@ -141,3 +141,46 @@ export async function patch<T>(
 ): Promise<T> {
   return authenticatedFetch<T>(endpoint, { method: 'PATCH', body });
 }
+
+/**
+ * Upload FormData (multipart) to the Mastodon API
+ * Does NOT set Content-Type header — fetch auto-sets the multipart boundary
+ */
+export async function uploadFormData<T>(
+  endpoint: string,
+  formData: FormData
+): Promise<T> {
+  const [instanceUrl, accessToken] = await Promise.all([
+    getInstanceUrl(),
+    getAccessToken(),
+  ]);
+
+  if (!instanceUrl || !accessToken) {
+    throw new NotAuthenticatedError();
+  }
+
+  const url = `${instanceUrl}${endpoint}`;
+  console.log(`[Mastodon] POST (multipart) ${endpoint}`);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.error(`[Mastodon] ${response.status} ${endpoint}:`, text);
+    throw new MastodonAPIError(response.status, response.statusText, text);
+  }
+
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  const data = await response.json();
+  console.log(`[Mastodon] ${endpoint} OK`);
+  return data;
+}

@@ -113,12 +113,13 @@ export default function HomeScreen() {
     setComposeVisible(true);
   };
 
-  const handleSubmitPost = async (content: string) => {
+  const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
     try {
       console.log('Submitting post:', content, replyToPostId ? `as reply to ${replyToPostId}` : '');
 
       await createPost(content, {
         inReplyToId: replyToPostId,
+        mediaIds,
       });
       console.log('Post submitted successfully');
 

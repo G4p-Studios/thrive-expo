@@ -1,7 +1,28 @@
-import { post } from '../client';
+import { get, post } from '../client';
 import { mapPost } from '../mappers';
 import { getInstanceUrl } from '../storage';
 import type { MastodonPost } from '@/types/mastodon';
+
+/**
+ * Get a single post by ID
+ */
+export async function getPost(postId: string): Promise<MastodonPost> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const raw = await get<any>(`/api/v1/statuses/${encodeURIComponent(postId)}`);
+  return mapPost(raw, instanceUrl);
+}
+
+/**
+ * Get the context (ancestors and descendants) of a post
+ */
+export async function getPostContext(postId: string): Promise<{ ancestors: MastodonPost[]; descendants: MastodonPost[] }> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const raw = await get<any>(`/api/v1/statuses/${encodeURIComponent(postId)}/context`);
+  return {
+    ancestors: (raw.ancestors || []).map((p: any) => mapPost(p, instanceUrl)),
+    descendants: (raw.descendants || []).map((p: any) => mapPost(p, instanceUrl)),
+  };
+}
 
 interface CreatePostOptions {
   inReplyToId?: string;

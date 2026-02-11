@@ -11,9 +11,11 @@ import {
   Share,
   AccessibilityInfo,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
+import MediaPlayer from '@/components/MediaPlayer';
 
 // Helper to resolve image sources
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -28,10 +30,12 @@ interface PostCardProps {
   onReblog: (postId: string, currentState: boolean) => void;
   onFavourite: (postId: string, currentState: boolean) => void;
   onBookmark?: (postId: string, currentState: boolean) => void;
+  onPress?: (postId: string) => void;
 }
 
-function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCardProps) {
+function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }: PostCardProps) {
   const colorScheme = useColorScheme();
+  const router = useRouter();
   const theme = colorScheme === 'dark' ? colors.dark : colors.light;
 
   // Check if this is a boosted post
@@ -93,6 +97,14 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
   const timeAgo = formatDate(actualPost.createdAt);
 
   const repliesCount = actualPost.repliesCount || 0;
+
+  const handlePress = useCallback(() => {
+    if (onPress) {
+      onPress(post.id);
+    } else {
+      router.push(`/post/${post.id}` as any);
+    }
+  }, [onPress, post.id, router]);
 
   const handleShare = useCallback(() => {
     const url = actualPost.url || actualPost.uri;
@@ -175,7 +187,9 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
   }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, reblogged, favourited, bookmarked]);
 
   return (
-    <View
+    <TouchableOpacity
+      onPress={handlePress}
+      activeOpacity={0.7}
       style={[styles.container, { backgroundColor: theme.card, borderColor: theme.border }]}
       accessible={true}
       accessibilityRole="button"
@@ -259,12 +273,16 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
       {actualPost.mediaAttachments && actualPost.mediaAttachments.length > 0 && (
         <View style={styles.mediaContainer} importantForAccessibility="no-hide-descendants">
           {actualPost.mediaAttachments.slice(0, 4).map((media, index) => (
-            <Image
-              key={index}
-              source={resolveImageSource(media.url)}
-              style={styles.mediaImage}
-              accessible={false}
-            />
+            media.type === 'video' || media.type === 'gifv' || media.type === 'audio' ? (
+              <MediaPlayer key={media.id || index} attachment={media} />
+            ) : (
+              <Image
+                key={media.id || index}
+                source={resolveImageSource(media.url)}
+                style={styles.mediaImage}
+                accessible={false}
+              />
+            )
           ))}
         </View>
       )}
@@ -365,7 +383,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark }: PostCard
           />
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
