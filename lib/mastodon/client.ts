@@ -143,6 +143,16 @@ export async function patch<T>(
 }
 
 /**
+ * Make an authenticated PUT request
+ */
+export async function put<T>(
+  endpoint: string,
+  body?: Record<string, unknown>
+): Promise<T> {
+  return authenticatedFetch<T>(endpoint, { method: 'PUT', body });
+}
+
+/**
  * Upload FormData (multipart) to the Mastodon API
  * Does NOT set Content-Type header — fetch auto-sets the multipart boundary
  */

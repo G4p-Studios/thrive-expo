@@ -14,7 +14,7 @@ import {
   ImageSourcePropType,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MastodonNotification } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import { getNotifications, clearNotifications } from '@/lib/mastodon';
@@ -34,6 +34,8 @@ export default function NotificationsScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [clearModalVisible, setClearModalVisible] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
@@ -48,9 +50,16 @@ export default function NotificationsScreen() {
       console.log('Loading notifications', maxId ? `with maxId: ${maxId}` : '');
       if (!maxId) {
         setLoading(true);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
       }
       const response = await getNotifications(maxId);
       console.log(`Loaded ${response.notifications.length} notifications`);
+
+      if (response.notifications.length === 0) {
+        setHasMore(false);
+      }
 
       if (maxId) {
         setNotifications((prev) => [...prev, ...response.notifications]);
@@ -64,6 +73,7 @@ export default function NotificationsScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   }, []);
 
@@ -215,6 +225,23 @@ export default function NotificationsScreen() {
     );
   }, [notifications.length, theme.primary]);
 
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMore || notifications.length === 0) return;
+    const lastNotification = notifications[notifications.length - 1];
+    if (lastNotification) {
+      loadNotifications(lastNotification.id);
+    }
+  }, [loadingMore, hasMore, notifications, loadNotifications]);
+
+  const footerComponent = useMemo(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+        <ActivityIndicator size="small" color={theme.text} />
+      </View>
+    );
+  }, [loadingMore, theme.text]);
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -271,6 +298,12 @@ export default function NotificationsScreen() {
           </View>
         }
         contentContainerStyle={notifications.length === 0 ? styles.emptyListContent : undefined}
+        ListFooterComponent={footerComponent}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={5}
       />
 
       {/* Clear All Confirmation Modal */}
@@ -299,14 +332,18 @@ export default function NotificationsScreen() {
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel, { borderColor: theme.border }]}
                 onPress={() => setClearModalVisible(false)}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
               >
-                <Text style={[styles.modalButtonTextCancel, { color: theme.text }]}>
-                  Cancel
-                </Text>
+                <Text style={[styles.modalButtonTextCancel, { color: theme.text }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm, { backgroundColor: theme.error }]}
                 onPress={handleClearAll}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Clear all notifications"
               >
                 <Text style={styles.modalButtonTextConfirm}>Clear</Text>
               </TouchableOpacity>
@@ -338,6 +375,9 @@ export default function NotificationsScreen() {
             <TouchableOpacity
               style={[styles.modalButton, styles.modalButtonConfirm, { backgroundColor: theme.primary }]}
               onPress={() => setErrorModalVisible(false)}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="OK"
             >
               <Text style={styles.modalButtonTextConfirm}>OK</Text>
             </TouchableOpacity>

@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/natively-dark.png",
       "resizeMode": "contain",
@@ -35,7 +34,15 @@
       "expo-font",
       "expo-router",
       "expo-web-browser",
-      "@react-native-community/datetimepicker"
+      "expo-secure-store",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Thrive needs access to your microphone to record audio."
+        }
+      ],
+      "expo-video"
     ],
     "scheme": "thrive",
     "intentFilters": [
@@ -54,7 +61,8 @@
       }
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "reactCompiler": true
     },
     "extra": {
       "router": {},

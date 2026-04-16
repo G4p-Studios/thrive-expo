@@ -14,7 +14,7 @@ import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import ComposeModal from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import {
@@ -41,26 +41,25 @@ export default function HomeScreen() {
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [replyToPostId, setReplyToPostId] = useState<string | undefined>(undefined);
   const [replyToUsername, setReplyToUsername] = useState<string | undefined>(undefined);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
 
   const checkConnection = useCallback(async () => {
     try {
-      console.log('Checking Mastodon connection status');
       const connected = await isAuthenticated();
 
       if (connected) {
         setIsConnected(true);
         loadTimeline();
       } else {
-        console.log('No Mastodon account connected, redirecting to connect screen');
         setIsConnected(false);
         setLoading(false);
         router.replace('/connect-mastodon');
       }
     } catch (error: any) {
-      console.log('Error checking Mastodon connection:', error);
       setIsConnected(false);
       setLoading(false);
       router.replace('/connect-mastodon');
@@ -68,18 +67,22 @@ export default function HomeScreen() {
   }, [router]);
 
   useEffect(() => {
-    console.log('HomeScreen mounted, checking Mastodon connection');
     checkConnection();
   }, [checkConnection]);
 
   const loadTimeline = useCallback(async (maxId?: string) => {
     try {
-      console.log('Loading timeline', maxId ? `with maxId: ${maxId}` : '');
       if (!maxId) {
         setLoading(true);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
       }
       const response = await getHomeTimeline(maxId);
-      console.log(`Loaded ${response.posts.length} posts from timeline`);
+
+      if (response.posts.length === 0) {
+        setHasMore(false);
+      }
 
       if (maxId) {
         setPosts((prev) => [...prev, ...response.posts]);
@@ -93,30 +96,27 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   }, []);
 
   const handleCompose = () => {
-    console.log('User tapped compose button');
     setReplyToPostId(undefined);
     setReplyToUsername(undefined);
     setComposeVisible(true);
   };
 
-  const handleSubmitPost = async (content: string) => {
+  const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
     try {
-      console.log('Submitting post:', content, replyToPostId ? `as reply to ${replyToPostId}` : '');
-
       await createPost(content, {
         inReplyToId: replyToPostId,
+        mediaIds,
       });
-      console.log('Post submitted successfully');
 
       setComposeVisible(false);
       setReplyToPostId(undefined);
       setReplyToUsername(undefined);
 
-      // Refresh timeline
       loadTimeline();
     } catch (error: any) {
       console.error('Failed to submit post:', error);
@@ -125,21 +125,19 @@ export default function HomeScreen() {
     }
   };
 
-  const handleReply = (postId: string) => {
-    console.log('User tapped reply on post:', postId);
-    const post = posts.find(p => p.id === postId);
-    if (post) {
-      console.log('Opening reply composer for:', post.account.username);
-      setReplyToPostId(postId);
-      setReplyToUsername(post.account.username);
-      setComposeVisible(true);
-    }
-  };
+  const handleReply = useCallback((postId: string) => {
+    setPosts((currentPosts) => {
+      const post = currentPosts.find(p => p.id === postId);
+      if (post) {
+        setReplyToPostId(postId);
+        setReplyToUsername(post.account.username);
+        setComposeVisible(true);
+      }
+      return currentPosts;
+    });
+  }, []);
 
-  const handleReblog = async (postId: string, currentState: boolean) => {
-    console.log(`User tapped ${currentState ? 'unreblog' : 'reblog'} on post:`, postId);
-
-    // Optimistic update
+  const handleReblog = useCallback(async (postId: string, currentState: boolean) => {
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
@@ -154,10 +152,8 @@ export default function HomeScreen() {
       } else {
         await reblog(postId);
       }
-      console.log('Reblog action completed');
     } catch (error: any) {
       console.error('Failed to reblog:', error);
-      // Rollback
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
@@ -168,12 +164,9 @@ export default function HomeScreen() {
       setErrorMessage(error.message || 'Failed to reblog');
       setErrorModalVisible(true);
     }
-  };
+  }, []);
 
-  const handleFavourite = async (postId: string, currentState: boolean) => {
-    console.log(`User tapped ${currentState ? 'unfavourite' : 'favourite'} on post:`, postId);
-
-    // Optimistic update
+  const handleFavourite = useCallback(async (postId: string, currentState: boolean) => {
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
@@ -188,10 +181,8 @@ export default function HomeScreen() {
       } else {
         await favourite(postId);
       }
-      console.log('Favourite action completed');
     } catch (error: any) {
       console.error('Failed to favourite:', error);
-      // Rollback
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
@@ -202,12 +193,9 @@ export default function HomeScreen() {
       setErrorMessage(error.message || 'Failed to favourite');
       setErrorModalVisible(true);
     }
-  };
+  }, []);
 
-  const handleBookmark = async (postId: string, currentState: boolean) => {
-    console.log(`User tapped ${currentState ? 'unbookmark' : 'bookmark'} on post:`, postId);
-
-    // Optimistic update
+  const handleBookmark = useCallback(async (postId: string, currentState: boolean) => {
     setPosts((prev) =>
       prev.map((p) =>
         p.id === postId
@@ -222,10 +210,8 @@ export default function HomeScreen() {
       } else {
         await bookmark(postId);
       }
-      console.log('Bookmark action completed');
     } catch (error: any) {
       console.error('Failed to bookmark:', error);
-      // Rollback
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
@@ -236,15 +222,21 @@ export default function HomeScreen() {
       setErrorMessage(error.message || 'Failed to bookmark');
       setErrorModalVisible(true);
     }
-  };
+  }, []);
 
   const handleConnect = () => {
-    console.log('User tapped connect Mastodon button');
     router.push('/connect-mastodon');
   };
 
   const headerRight = useCallback(() => (
-    <TouchableOpacity onPress={handleCompose} style={styles.headerButton}>
+    <TouchableOpacity
+      onPress={handleCompose}
+      style={styles.headerButton}
+      accessible={true}
+      accessibilityRole="button"
+      accessibilityLabel="Compose new post"
+      accessibilityHint="Double tap to write a new post"
+    >
       <IconSymbol
         ios_icon_name="square.and.pencil"
         android_material_icon_name="edit"
@@ -253,6 +245,48 @@ export default function HomeScreen() {
       />
     </TouchableOpacity>
   ), [theme.primary]);
+
+  const keyExtractor = useCallback((item: MastodonPost) => item.id, []);
+
+  const renderItem = useCallback(({ item }: { item: MastodonPost }) => (
+    <PostCard
+      post={item}
+      onReply={handleReply}
+      onReblog={handleReblog}
+      onFavourite={handleFavourite}
+      onBookmark={handleBookmark}
+    />
+  ), [handleReply, handleReblog, handleFavourite, handleBookmark]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadTimeline();
+  }, [loadTimeline]);
+
+  const emptyComponent = useMemo(() => (
+    <View style={styles.emptyContainer}>
+      <Text style={[styles.emptyText, { color: theme.text }]}>
+        No posts yet. Follow some accounts to see their posts here!
+      </Text>
+    </View>
+  ), [theme.text]);
+
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMore || posts.length === 0) return;
+    const lastPost = posts[posts.length - 1];
+    if (lastPost) {
+      loadTimeline(lastPost.id);
+    }
+  }, [loadingMore, hasMore, posts, loadTimeline]);
+
+  const footerComponent = useMemo(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={theme.text} />
+      </View>
+    );
+  }, [loadingMore, theme.text]);
 
   if (loading) {
     return (
@@ -291,7 +325,13 @@ export default function HomeScreen() {
           <Text style={[styles.emptyText, { color: theme.text }]}>
             Connect your Mastodon account to get started
           </Text>
-          <TouchableOpacity style={[styles.connectButton, { backgroundColor: theme.primary }]} onPress={handleConnect}>
+          <TouchableOpacity
+            style={[styles.connectButton, { backgroundColor: theme.primary }]}
+            onPress={handleConnect}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Connect Mastodon account"
+          >
             <Text style={styles.connectButtonText}>Connect Mastodon</Text>
           </TouchableOpacity>
         </View>
@@ -311,35 +351,24 @@ export default function HomeScreen() {
 
       <FlatList
         data={posts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <PostCard
-            post={item}
-            onReply={handleReply}
-            onReblog={handleReblog}
-            onFavourite={handleFavourite}
-            onBookmark={handleBookmark}
-          />
-        )}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              console.log('User pulled to refresh');
-              setRefreshing(true);
-              loadTimeline();
-            }}
+            onRefresh={handleRefresh}
             tintColor={theme.text}
           />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: theme.text }]}>
-              No posts yet. Follow some accounts to see their posts here!
-            </Text>
-          </View>
-        }
+        ListEmptyComponent={emptyComponent}
+        ListFooterComponent={footerComponent}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
         contentContainerStyle={posts.length === 0 ? styles.emptyListContent : undefined}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        initialNumToRender={10}
       />
 
       <ComposeModal
@@ -377,6 +406,9 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={[styles.modalButton, { backgroundColor: theme.primary }]}
               onPress={() => setErrorModalVisible(false)}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="OK"
             >
               <Text style={styles.modalButtonText}>OK</Text>
             </TouchableOpacity>
@@ -409,6 +441,10 @@ const styles = StyleSheet.create({
   },
   emptyListContent: {
     flexGrow: 1,
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
   emptyText: {
     fontSize: 16,
@@ -459,3 +495,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

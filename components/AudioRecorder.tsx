@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,15 @@ import {
   TouchableOpacity,
   useColorScheme,
 } from 'react-native';
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  useAudioPlayer,
+  useAudioPlayerStatus,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 
@@ -22,13 +30,18 @@ export default function AudioRecorder({ visible, onClose, onRecordingComplete }:
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? colors.dark : colors.light;
 
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder);
+  const player = useAudioPlayer(null);
+  const playerStatus = useAudioPlayerStatus(player);
+
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const isRecording = recorderState.isRecording;
+  const isPlaying = playerStatus.playing;
+  const displayElapsed = isRecording || recordedUri
+    ? Math.floor(recorderState.durationMillis / 1000)
+    : 0;
 
   useEffect(() => {
     if (!visible) {
@@ -37,65 +50,41 @@ export default function AudioRecorder({ visible, onClose, onRecordingComplete }:
   }, [visible]);
 
   const cleanup = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (recordingRef.current) {
-      recordingRef.current.stopAndUnloadAsync().catch(() => {});
-      recordingRef.current = null;
+    if (recorder.isRecording) {
+      recorder.stop().catch(() => {});
     }
-    if (soundRef.current) {
-      soundRef.current.unloadAsync().catch(() => {});
-      soundRef.current = null;
-    }
-    setIsRecording(false);
+    player.pause();
     setRecordedUri(null);
-    setElapsed(0);
-    setIsPlaying(false);
-  }, []);
+  }, [recorder, player]);
 
   const startRecording = async () => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) return;
+      const { granted } = await requestRecordingPermissionsAsync();
+      if (!granted) return;
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      recordingRef.current = recording;
-      setIsRecording(true);
-      setElapsed(0);
-
-      timerRef.current = setInterval(() => {
-        setElapsed(prev => prev + 1);
-      }, 1000);
+      await recorder.prepareToRecordAsync();
+      recorder.record();
     } catch (error) {
       console.error('Failed to start recording:', error);
     }
   };
 
   const stopRecording = async () => {
-    if (!recordingRef.current) return;
-
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
-      setIsRecording(false);
+      await recorder.stop();
+      const uri = recorder.uri;
 
       if (uri) {
         setRecordedUri(uri);
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
+        await setAudioModeAsync({
+          allowsRecording: false,
         });
+        player.replace(uri);
       }
     } catch (error) {
       console.error('Failed to stop recording:', error);
@@ -105,28 +94,12 @@ export default function AudioRecorder({ visible, onClose, onRecordingComplete }:
   const togglePreview = async () => {
     if (!recordedUri) return;
 
-    if (soundRef.current) {
-      if (isPlaying) {
-        await soundRef.current.pauseAsync();
-        setIsPlaying(false);
-      } else {
-        await soundRef.current.playFromPositionAsync(0);
-        setIsPlaying(true);
-      }
-      return;
+    if (isPlaying) {
+      player.pause();
+    } else {
+      await player.seekTo(0);
+      player.play();
     }
-
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: recordedUri },
-      { shouldPlay: true },
-      (status: AVPlaybackStatus) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setIsPlaying(false);
-        }
-      }
-    );
-    soundRef.current = sound;
-    setIsPlaying(true);
   };
 
   const handleConfirm = () => {
@@ -159,7 +132,7 @@ export default function AudioRecorder({ visible, onClose, onRecordingComplete }:
           <Text style={[styles.title, { color: theme.text }]}>Record Audio</Text>
 
           <Text style={[styles.timer, { color: theme.text }]}>
-            {formatTime(elapsed)}
+            {formatTime(displayElapsed)}
           </Text>
 
           {!recordedUri ? (

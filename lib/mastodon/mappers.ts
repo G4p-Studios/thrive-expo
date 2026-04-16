@@ -4,6 +4,7 @@ import type {
   MastodonMediaAttachment,
   MastodonNotification,
   MastodonList,
+  MastodonRelationship,
   SearchResponse,
 } from '@/types/mastodon';
 
@@ -110,5 +111,24 @@ export function mapSearchResponse(raw: any, instanceUrl: string = ''): SearchRes
     accounts: (raw.accounts || []).map((a: any) => mapAccount(a, instanceUrl)),
     statuses: (raw.statuses || []).map((s: any) => mapPost(s, instanceUrl)),
     hashtags: raw.hashtags || [],
+  };
+}
+
+/**
+ * Map Mastodon API relationship response
+ */
+export function mapRelationship(raw: any): MastodonRelationship {
+  return {
+    id: raw.id,
+    following: raw.following || false,
+    followedBy: raw.followed_by || false,
+    blocking: raw.blocking || false,
+    blockedBy: raw.blocked_by || false,
+    muting: raw.muting || false,
+    mutingNotifications: raw.muting_notifications || false,
+    requested: raw.requested || false,
+    domainBlocking: raw.domain_blocking || false,
+    endorsed: raw.endorsed || false,
+    note: raw.note || '',
   };
 }

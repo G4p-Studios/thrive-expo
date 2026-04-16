@@ -120,7 +120,7 @@ export default function ListsScreen() {
         importantForAccessibility="no"
       >
         <TouchableOpacity
-          style={styles.listContent}
+          style={styles.listItemContent}
           onPress={() => handleViewList(item.id, item.title)}
           accessible={true}
           accessibilityRole="button"
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 12,
   },
-  listContent: {
+  listItemContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',

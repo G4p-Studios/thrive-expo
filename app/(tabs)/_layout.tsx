@@ -4,36 +4,32 @@ import { Tabs } from 'expo-router';
 import { useTheme } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
 
-// Conditionally import NativeTabs only on iOS
+// Conditionally import NativeTabs only on iOS (SDK 55 API)
 let NativeTabs: typeof import('expo-router/unstable-native-tabs').NativeTabs;
-let Icon: typeof import('expo-router/unstable-native-tabs').Icon;
-let Label: typeof import('expo-router/unstable-native-tabs').Label;
 
 if (Platform.OS === 'ios') {
   const nativeTabsModule = require('expo-router/unstable-native-tabs');
   NativeTabs = nativeTabsModule.NativeTabs;
-  Icon = nativeTabsModule.Icon;
-  Label = nativeTabsModule.Label;
 }
 
 function IOSTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="(home)">
-        <Label>Home</Label>
-        <Icon sf={{ default: 'house', selected: 'house.fill' }} drawable="home" />
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(explore)">
-        <Label>Explore</Label>
-        <Icon sf={{ default: 'magnifyingglass', selected: 'magnifyingglass' }} drawable="search" />
+        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'magnifyingglass', selected: 'magnifyingglass' }} md="search" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(notifications)">
-        <Label>Notifications</Label>
-        <Icon sf={{ default: 'bell', selected: 'bell.fill' }} drawable="notifications" />
+        <NativeTabs.Trigger.Label>Notifications</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'bell', selected: 'bell.fill' }} md="notifications" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(profile)">
-        <Label>Me</Label>
-        <Icon sf={{ default: 'person', selected: 'person.fill' }} drawable="person" />
+        <NativeTabs.Trigger.Label>Me</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'person', selected: 'person.fill' }} md="person" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

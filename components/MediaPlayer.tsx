@@ -1,7 +1,8 @@
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, useColorScheme } from 'react-native';
-import { Video, ResizeMode, Audio, AVPlaybackStatus } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { colors } from '@/styles/commonStyles';
 import { MastodonMediaAttachment } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -26,74 +27,44 @@ export default function MediaPlayer({ attachment }: MediaPlayerProps) {
 }
 
 function VideoPlayer({ attachment, theme }: { attachment: MastodonMediaAttachment; theme: any }) {
-  const videoRef = useRef<Video>(null);
+  const player = useVideoPlayer(attachment.url, (player) => {
+    player.loop = attachment.type === 'gifv';
+  });
 
   return (
-    <Video
-      ref={videoRef}
-      source={{ uri: attachment.url }}
-      posterSource={attachment.previewUrl ? { uri: attachment.previewUrl } : undefined}
-      usePoster={!!attachment.previewUrl}
-      resizeMode={ResizeMode.CONTAIN}
-      useNativeControls
-      isLooping={attachment.type === 'gifv'}
-      shouldPlay={false}
+    <VideoView
+      player={player}
       style={styles.video}
+      contentFit="contain"
+      nativeControls
     />
   );
 }
 
 function AudioPlayer({ attachment, theme }: { attachment: MastodonMediaAttachment; theme: any }) {
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [position, setPosition] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const player = useAudioPlayer(attachment.url);
+  const status = useAudioPlayerStatus(player);
 
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
-    };
-  }, []);
+  const isPlaying = status.playing;
+  const currentTime = status.currentTime;
+  const duration = status.duration;
 
-  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-    setIsPlaying(status.isPlaying);
-    setPosition(status.positionMillis);
-    setDuration(status.durationMillis || 0);
-    if (status.didJustFinish) {
-      setIsPlaying(false);
-    }
-  }, []);
-
-  const togglePlayback = useCallback(async () => {
-    if (!soundRef.current) {
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: attachment.url },
-        { shouldPlay: true },
-        onPlaybackStatusUpdate
-      );
-      soundRef.current = sound;
-      setIsPlaying(true);
-      return;
-    }
-
+  const togglePlayback = useCallback(() => {
     if (isPlaying) {
-      await soundRef.current.pauseAsync();
+      player.pause();
     } else {
-      await soundRef.current.playAsync();
+      player.play();
     }
-  }, [isPlaying, attachment.url, onPlaybackStatusUpdate]);
+  }, [isPlaying, player]);
 
-  const formatTime = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
+  const formatTime = (seconds: number) => {
+    const totalSeconds = Math.floor(seconds);
     const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const secs = totalSeconds % 60;
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const progress = duration > 0 ? position / duration : 0;
+  const progress = duration > 0 ? currentTime / duration : 0;
 
   return (
     <View style={[styles.audioContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -116,7 +87,7 @@ function AudioPlayer({ attachment, theme }: { attachment: MastodonMediaAttachmen
           <View style={[styles.progressFill, { backgroundColor: theme.primary, width: `${progress * 100}%` }]} />
         </View>
         <Text style={[styles.timeText, { color: theme.textSecondary }]}>
-          {formatTime(position)} / {formatTime(duration)}
+          {formatTime(currentTime)} / {formatTime(duration)}
         </Text>
       </View>
     </View>

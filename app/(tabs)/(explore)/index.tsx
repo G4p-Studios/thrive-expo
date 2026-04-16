@@ -17,7 +17,7 @@ import {
 import { colors } from '@/styles/commonStyles';
 import ComposeModal from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MastodonPost, MastodonAccount, SearchResponse } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import {
@@ -57,6 +57,8 @@ export default function ExploreScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('public');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<'accounts' | 'statuses' | 'hashtags'>('statuses');
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
@@ -71,9 +73,16 @@ export default function ExploreScreen() {
       console.log('Loading public timeline', local ? '(local)' : '(federated)', maxId ? `with maxId: ${maxId}` : '');
       if (!maxId) {
         setLoading(true);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
       }
       const response = await getPublicTimeline(maxId, local);
       console.log(`Loaded ${response.posts.length} posts from public timeline`);
+
+      if (response.posts.length === 0) {
+        setHasMore(false);
+      }
 
       if (maxId) {
         setPosts((prev) => [...prev, ...response.posts]);
@@ -88,6 +97,7 @@ export default function ExploreScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   }, []);
 
@@ -136,12 +146,12 @@ export default function ExploreScreen() {
     }
   };
 
-  const handleSubmitPost = async (content: string) => {
+  const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
     try {
       console.log('Submitting reply:', content, 'to post:', replyToPostId);
 
       if (replyToPostId) {
-        await createPost(content, { inReplyToId: replyToPostId });
+        await createPost(content, { inReplyToId: replyToPostId, mediaIds });
         console.log('Reply submitted successfully');
       }
 
@@ -257,6 +267,23 @@ export default function ExploreScreen() {
     }
   };
 
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMore || posts.length === 0 || viewMode === 'search') return;
+    const lastPost = posts[posts.length - 1];
+    if (lastPost) {
+      loadPublicTimeline(lastPost.id, viewMode === 'local');
+    }
+  }, [loadingMore, hasMore, posts, viewMode, loadPublicTimeline]);
+
+  const footerComponent = useMemo(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+        <ActivityIndicator size="small" color={theme.text} />
+      </View>
+    );
+  }, [loadingMore, theme.text]);
+
   const handleFollowAccount = async (accountId: string, currentState: boolean) => {
     console.log(`User tapped ${currentState ? 'unfollow' : 'follow'} account:`, accountId);
 
@@ -285,7 +312,12 @@ export default function ExploreScreen() {
   };
 
   const renderAccount = ({ item }: { item: MastodonAccount }) => (
-    <View style={[styles.accountCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+    <View
+      style={[styles.accountCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+      accessible={true}
+      accessibilityRole="summary"
+      accessibilityLabel={`${item.displayName || item.username}, @${item.username}`}
+    >
       <Image
         source={resolveImageSource(item.avatar)}
         style={styles.accountAvatar}
@@ -313,7 +345,10 @@ export default function ExploreScreen() {
             borderWidth: item.following ? 1 : 0,
           }
         ]}
-        onPress={() => handleFollowAccount(item.id!, item.following || false)}
+        onPress={() => handleFollowAccount(item.id, item.following || false)}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={item.following ? `Unfollow ${item.displayName || item.username}` : `Follow ${item.displayName || item.username}`}
       >
         <Text style={[styles.followButtonText, { color: item.following ? theme.primary : '#fff' }]}>
           {item.following ? 'Following' : 'Follow'}
@@ -367,7 +402,12 @@ export default function ExploreScreen() {
             returnKeyType="search"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <IconSymbol
                 ios_icon_name="xmark.circle.fill"
                 android_material_icon_name="cancel"
@@ -384,6 +424,10 @@ export default function ExploreScreen() {
         <TouchableOpacity
           style={[styles.tab, viewMode === 'public' && styles.tabActive]}
           onPress={() => handleViewModeChange('public')}
+          accessible={true}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: viewMode === 'public' }}
+          accessibilityLabel="Public timeline"
         >
           <Text style={[styles.tabText, { color: viewMode === 'public' ? theme.primary : theme.textSecondary }]}>
             Public
@@ -392,6 +436,10 @@ export default function ExploreScreen() {
         <TouchableOpacity
           style={[styles.tab, viewMode === 'local' && styles.tabActive]}
           onPress={() => handleViewModeChange('local')}
+          accessible={true}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: viewMode === 'local' }}
+          accessibilityLabel="Local timeline"
         >
           <Text style={[styles.tabText, { color: viewMode === 'local' ? theme.primary : theme.textSecondary }]}>
             Local
@@ -403,6 +451,10 @@ export default function ExploreScreen() {
             setViewMode('search');
             if (searchQuery) handleSearch();
           }}
+          accessible={true}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: viewMode === 'search' }}
+          accessibilityLabel="Search"
         >
           <Text style={[styles.tabText, { color: viewMode === 'search' ? theme.primary : theme.textSecondary }]}>
             Search
@@ -416,6 +468,10 @@ export default function ExploreScreen() {
           <TouchableOpacity
             style={[styles.searchTypeTab, searchType === 'statuses' && { borderBottomColor: theme.primary, borderBottomWidth: 2 }]}
             onPress={() => setSearchType('statuses')}
+            accessible={true}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: searchType === 'statuses' }}
+            accessibilityLabel="Search posts"
           >
             <Text style={[styles.searchTypeText, { color: searchType === 'statuses' ? theme.primary : theme.textSecondary }]}>
               Posts
@@ -424,6 +480,10 @@ export default function ExploreScreen() {
           <TouchableOpacity
             style={[styles.searchTypeTab, searchType === 'accounts' && { borderBottomColor: theme.primary, borderBottomWidth: 2 }]}
             onPress={() => setSearchType('accounts')}
+            accessible={true}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: searchType === 'accounts' }}
+            accessibilityLabel="Search accounts"
           >
             <Text style={[styles.searchTypeText, { color: searchType === 'accounts' ? theme.primary : theme.textSecondary }]}>
               Accounts
@@ -432,6 +492,10 @@ export default function ExploreScreen() {
           <TouchableOpacity
             style={[styles.searchTypeTab, searchType === 'hashtags' && { borderBottomColor: theme.primary, borderBottomWidth: 2 }]}
             onPress={() => setSearchType('hashtags')}
+            accessible={true}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: searchType === 'hashtags' }}
+            accessibilityLabel="Search hashtags"
           >
             <Text style={[styles.searchTypeText, { color: searchType === 'hashtags' ? theme.primary : theme.textSecondary }]}>
               Hashtags
@@ -499,6 +563,12 @@ export default function ExploreScreen() {
             </View>
           }
           contentContainerStyle={posts.length === 0 ? styles.emptyListContent : undefined}
+          ListFooterComponent={footerComponent}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={5}
         />
       )}
 
@@ -537,6 +607,9 @@ export default function ExploreScreen() {
             <TouchableOpacity
               style={[styles.modalButton, { backgroundColor: theme.primary }]}
               onPress={() => setErrorModalVisible(false)}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="OK"
             >
               <Text style={styles.modalButtonText}>OK</Text>
             </TouchableOpacity>

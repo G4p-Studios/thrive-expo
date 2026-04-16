@@ -1,6 +1,6 @@
 
 export interface MastodonAccount {
-  id?: string;
+  id: string;
   username: string;
   displayName: string;
   avatar: string;
@@ -67,6 +67,42 @@ export interface MastodonNotification {
   createdAt: string;
   account: MastodonAccount;
   status?: MastodonPost;
+}
+
+export interface MastodonRelationship {
+  id: string;
+  following: boolean;
+  followedBy: boolean;
+  blocking: boolean;
+  blockedBy: boolean;
+  muting: boolean;
+  mutingNotifications: boolean;
+  requested: boolean;
+  domainBlocking: boolean;
+  endorsed: boolean;
+  note: string;
+}
+
+export interface MastodonPoll {
+  id: string;
+  expiresAt: string | null;
+  expired: boolean;
+  multiple: boolean;
+  votesCount: number;
+  votersCount: number | null;
+  voted: boolean;
+  ownVotes: number[];
+  options: Array<{
+    title: string;
+    votesCount: number | null;
+  }>;
+}
+
+export interface MastodonEmoji {
+  shortcode: string;
+  url: string;
+  staticUrl: string;
+  visibleInPicker: boolean;
 }
 
 export interface SearchResponse {

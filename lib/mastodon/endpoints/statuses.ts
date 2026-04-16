@@ -1,4 +1,4 @@
-import { get, post } from '../client';
+import { get, post, del, put } from '../client';
 import { mapPost } from '../mappers';
 import { getInstanceUrl } from '../storage';
 import type { MastodonPost } from '@/types/mastodon';
@@ -116,5 +116,79 @@ export async function bookmark(postId: string): Promise<MastodonPost> {
 export async function unbookmark(postId: string): Promise<MastodonPost> {
   const instanceUrl = await getInstanceUrl() || '';
   const raw = await post<any>(`/api/v1/statuses/${encodeURIComponent(postId)}/unbookmark`, {});
+  return mapPost(raw, instanceUrl);
+}
+
+/**
+ * Delete a post
+ */
+export async function deletePost(postId: string): Promise<void> {
+  await del(`/api/v1/statuses/${encodeURIComponent(postId)}`);
+}
+
+interface EditPostOptions {
+  mediaIds?: string[];
+  sensitive?: boolean;
+  spoilerText?: string;
+}
+
+/**
+ * Edit a post (status)
+ */
+export async function editPost(
+  postId: string,
+  status: string,
+  options: EditPostOptions = {}
+): Promise<MastodonPost> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const body: Record<string, unknown> = { status };
+
+  if (options.mediaIds?.length) {
+    body.media_ids = options.mediaIds;
+  }
+  if (options.sensitive !== undefined) {
+    body.sensitive = options.sensitive;
+  }
+  if (options.spoilerText) {
+    body.spoiler_text = options.spoilerText;
+  }
+
+  const raw = await put<any>(`/api/v1/statuses/${encodeURIComponent(postId)}`, body);
+  return mapPost(raw, instanceUrl);
+}
+
+/**
+ * Pin a post to your profile
+ */
+export async function pinPost(postId: string): Promise<MastodonPost> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const raw = await post<any>(`/api/v1/statuses/${encodeURIComponent(postId)}/pin`, {});
+  return mapPost(raw, instanceUrl);
+}
+
+/**
+ * Unpin a post from your profile
+ */
+export async function unpinPost(postId: string): Promise<MastodonPost> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const raw = await post<any>(`/api/v1/statuses/${encodeURIComponent(postId)}/unpin`, {});
+  return mapPost(raw, instanceUrl);
+}
+
+/**
+ * Mute a conversation (stop receiving notifications from replies)
+ */
+export async function muteConversation(postId: string): Promise<MastodonPost> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const raw = await post<any>(`/api/v1/statuses/${encodeURIComponent(postId)}/mute`, {});
+  return mapPost(raw, instanceUrl);
+}
+
+/**
+ * Unmute a conversation
+ */
+export async function unmuteConversation(postId: string): Promise<MastodonPost> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const raw = await post<any>(`/api/v1/statuses/${encodeURIComponent(postId)}/unmute`, {});
   return mapPost(raw, instanceUrl);
 }
