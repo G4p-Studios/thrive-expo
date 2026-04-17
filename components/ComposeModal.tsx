@@ -13,7 +13,9 @@ import {
   ActivityIndicator,
   Image,
   ScrollView,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { colors } from '@/styles/commonStyles';
@@ -40,6 +42,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToId, re
   const [mediaAttachments, setMediaAttachments] = useState<MastodonMediaAttachment[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [audioRecorderVisible, setAudioRecorderVisible] = useState(false);
+  const insets = useSafeAreaInsets();
 
   // Pre-fill with @username when replying
   React.useEffect(() => {
@@ -176,7 +179,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToId, re
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.container, { backgroundColor: theme.background }]}
+        style={[styles.container, { backgroundColor: theme.background, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? insets.top) : 0 }]}
       >
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -220,7 +223,11 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToId, re
         </View>
 
         {/* Content */}
-        <View style={styles.content}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentInner}
+          keyboardShouldPersistTaps="handled"
+        >
           <TextInput
             style={[styles.input, { color: theme.text }]}
             placeholder="What's on your mind?"
@@ -283,7 +290,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToId, re
               <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>
             </View>
           ) : null}
-        </View>
+        </ScrollView>
 
         {/* Footer */}
         <View style={[styles.footer, { borderTopColor: theme.border }]}>
@@ -392,10 +399,15 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  contentInner: {
+    flexGrow: 1,
+  },
   input: {
     flex: 1,
     fontSize: 18,
     textAlignVertical: 'top',
+    minHeight: 120,
+    maxHeight: 300,
   },
   mediaPreview: {
     flexDirection: 'row',

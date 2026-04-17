@@ -365,9 +365,10 @@ export default function HomeScreen() {
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         contentContainerStyle={posts.length === 0 ? styles.emptyListContent : undefined}
-        removeClippedSubviews={true}
+        contentInsetAdjustmentBehavior="automatic"
+        removeClippedSubviews={false}
         maxToRenderPerBatch={10}
-        windowSize={5}
+        windowSize={11}
         initialNumToRender={10}
       />
 
