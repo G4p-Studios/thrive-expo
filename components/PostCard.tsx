@@ -35,9 +35,11 @@ interface PostCardProps {
   onFavourite: (postId: string, currentState: boolean) => void;
   onBookmark?: (postId: string, currentState: boolean) => void;
   onPress?: (postId: string) => void;
+  /** When set, the translated text is shown in place of the original. */
+  translation?: { content: string; detectedSourceLanguage: string; provider: string };
 }
 
-function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }: PostCardProps) {
+function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, translation }: PostCardProps) {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const theme = colorScheme === 'dark' ? colors.dark : colors.light;
@@ -77,7 +79,9 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
   };
 
-  const displayContent = stripHtml(actualPost.content);
+  // A translation replaces the body; the original stays one tap away by
+  // translating again from the menu.
+  const displayContent = stripHtml(translation?.content ?? actualPost.content);
 
   // Filters are matched server-side; `filtered` tells us what to do about it.
   // A boost is judged on the boosted post, which is what actually matched.
@@ -243,6 +247,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
       );
     } else {
       parts.push(stripEmojiColons(displayContent, actualPost.emojis));
+      if (translation) parts.push('Translated');
       if (card?.title) {
         parts.push(
           card.providerName
@@ -304,7 +309,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     if (states.length > 0) parts.push(`You have ${states.join(', ')} this post`);
 
     return parts.join('. ');
-  }, [isBoost, boosterDisplayName, displayName, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes, actualPost.account.acct, warnFilter, actualPost.emojis, card]);
+  }, [isBoost, boosterDisplayName, displayName, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes, actualPost.account.acct, warnFilter, actualPost.emojis, card, translation]);
 
   // Accessibility actions with dynamic labels
   const accessibilityActions = useMemo(() => {
@@ -503,6 +508,14 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
             style={[styles.content, { color: theme.text }]}
             size={16}
           />
+          {translation ? (
+            <Text style={[styles.translationNote, { color: theme.textSecondary }]} accessible={false}>
+              {translation.detectedSourceLanguage
+                ? `Translated from ${translation.detectedSourceLanguage.toUpperCase()}`
+                : 'Translated'}
+              {translation.provider ? ` by ${translation.provider}` : ''}
+            </Text>
+          ) : null}
         </View>
       )}
 
@@ -796,6 +809,7 @@ export default memo(PostCard, (prevProps, nextProps) => {
     prevPost.content === nextPost.content &&
     prevPost.spoilerText === nextPost.spoilerText &&
     prevPost.sensitive === nextPost.sensitive &&
+    prevProps.translation?.content === nextProps.translation?.content &&
     prevPost.poll?.id === nextPost.poll?.id &&
     prevPost.poll?.voted === nextPost.poll?.voted &&
     prevPost.poll?.votesCount === nextPost.poll?.votesCount &&
@@ -847,6 +861,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  translationNote: { fontSize: 12, marginTop: 6, fontStyle: 'italic' },
   card: {
     marginTop: 10,
     borderWidth: 1,

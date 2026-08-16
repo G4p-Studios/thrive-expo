@@ -215,6 +215,72 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={() => router.push('/followed-tags' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Followed hashtags"
+            accessibilityHint="Double tap to manage the hashtags in your home timeline"
+          >
+            <View style={styles.settingInfo}>
+              <IconSymbol
+                ios_icon_name="number"
+                android_material_icon_name="tag"
+                size={24}
+                color={theme.primary}
+                style={{ marginRight: 16 }}
+              />
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>
+                  Followed hashtags
+                </Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Hashtags mixed into your home timeline
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={() => router.push('/announcements' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Server announcements"
+            accessibilityHint="Double tap to read news from the people running your server"
+          >
+            <View style={styles.settingInfo}>
+              <IconSymbol
+                ios_icon_name="megaphone.fill"
+                android_material_icon_name="campaign"
+                size={24}
+                color={theme.primary}
+                style={{ marginRight: 16 }}
+              />
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>
+                  Server announcements
+                </Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  News from the people running your server
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
             onPress={() => router.push('/filters' as any)}
             accessible={true}
             accessibilityRole="button"

@@ -32,6 +32,7 @@ import {
   countStatusCharacters,
   generateIdempotencyKey,
   getStatusSource,
+  getPreferences,
 } from '@/lib/mastodon';
 import type { PostVisibility } from '@/lib/mastodon';
 import {
@@ -177,6 +178,30 @@ export default function ComposeModal({
 
   // Declared ahead of the handlers that close over it.
   const maxAttachments = instanceConfig.maxMediaAttachments;
+
+  // The account's own posting defaults, set in the server's web preferences.
+  // Ignoring these would post publicly for someone who defaults to followers.
+  React.useEffect(() => {
+    if (!visible) return;
+    // An explicit prop, a reply, or an edit all decide the audience themselves.
+    if (initialVisibility || replyToPost || editingPost) return;
+
+    let cancelled = false;
+
+    getPreferences()
+      .then(preferences => {
+        if (cancelled) return;
+        setVisibility(preferences.defaultVisibility);
+        if (preferences.defaultSensitive) setMarkSensitive(true);
+      })
+      .catch(() => {
+        // Older servers may not expose preferences; the default stands.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, initialVisibility, replyToPost, editingPost]);
 
   // Pre-fill the reply with the full handles of everyone in the thread.
   React.useEffect(() => {

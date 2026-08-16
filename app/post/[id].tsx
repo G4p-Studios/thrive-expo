@@ -21,6 +21,7 @@ import {
   getReplyTarget,
   getAccountCache,
   editPost,
+  translatePost,
   getPost,
   getPostContext,
   createPost,
@@ -32,6 +33,7 @@ import {
   unbookmark,
 } from '@/lib/mastodon';
 import { MastodonPost } from '@/types/mastodon';
+import type { MastodonTranslation } from '@/lib/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 
 interface ThreadItem {
@@ -55,6 +57,7 @@ export default function PostDetailScreen() {
   const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
   const [reportTarget, setReportTarget] = useState<MastodonPost | undefined>(undefined);
   const [menuTargetId, setMenuTargetId] = useState<string | undefined>(undefined);
+  const [translations, setTranslations] = useState<Record<string, MastodonTranslation>>({});
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
@@ -120,6 +123,21 @@ export default function PostDetailScreen() {
       setComposeVisible(true);
     }
   }, [threadItems]);
+
+  const handleTranslate = useCallback(async (postId: string) => {
+    try {
+      const result = await translatePost(postId);
+      setTranslations(prev => ({ ...prev, [postId]: result }));
+    } catch (error: any) {
+      // Instances without a translation service configured answer 404.
+      setErrorMessage(
+        error?.status === 404
+          ? 'This server does not offer translation.'
+          : error.message || 'Could not translate that post'
+      );
+      setErrorModalVisible(true);
+    }
+  }, []);
 
   const handleReport = useCallback((postId: string) => {
     const item = threadItems.find(i => i.post.id === postId);
@@ -234,6 +252,7 @@ export default function PostDetailScreen() {
           onFavourite={handleFavourite}
           onBookmark={handleBookmark}
           onPress={handlePostPress}
+          translation={translations[item.post.id]}
         />
         {/* Secondary actions sit behind a menu so Report isn't a stray tap
             away from reply and boost. */}
@@ -264,35 +283,51 @@ export default function PostDetailScreen() {
         )}
       </View>
     );
-  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handlePostPress, currentAccountId, theme.primary, theme.border, theme.textSecondary]);
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handlePostPress, currentAccountId, translations, theme.primary, theme.border, theme.textSecondary]);
 
   const menuPost = threadItems.find(i => i.post.id === menuTargetId)?.post;
   const menuIsOwn =
     !!menuPost && !!currentAccountId && !menuPost.reblog && menuPost.account.id === currentAccountId;
 
   const menuItems = menuPost
-    ? menuIsOwn
-      ? [
-          {
-            key: 'edit',
-            label: 'Edit post',
-            hint: 'Change the text or content warning',
-            ios: 'pencil',
-            android: 'edit',
-            onPress: () => handleEdit(menuPost.id),
-          },
-        ]
-      : [
-          {
-            key: 'report',
-            label: 'Report post',
-            hint: 'Send this post to the moderators for review',
-            ios: 'flag',
-            android: 'flag',
-            destructive: true,
-            onPress: () => handleReport(menuPost.id),
-          },
-        ]
+    ? [
+        // Offered for anything not already translated; servers without a
+        // translation service answer 404, which is surfaced as a message.
+        ...(translations[menuPost.id]
+          ? []
+          : [
+              {
+                key: 'translate',
+                label: 'Translate',
+                hint: 'Show this post in your own language',
+                ios: 'character.bubble',
+                android: 'translate',
+                onPress: () => handleTranslate(menuPost.id),
+              },
+            ]),
+        ...(menuIsOwn
+          ? [
+              {
+                key: 'edit',
+                label: 'Edit post',
+                hint: 'Change the text or content warning',
+                ios: 'pencil',
+                android: 'edit',
+                onPress: () => handleEdit(menuPost.id),
+              },
+            ]
+          : [
+              {
+                key: 'report',
+                label: 'Report post',
+                hint: 'Send this post to the moderators for review',
+                ios: 'flag',
+                android: 'flag',
+                destructive: true,
+                onPress: () => handleReport(menuPost.id),
+              },
+            ]),
+      ]
     : [];
 
   if (loading) {

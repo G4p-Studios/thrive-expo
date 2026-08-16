@@ -138,6 +138,35 @@ export async function deletePost(postId: string): Promise<void> {
   await del(`/api/v1/statuses/${encodeURIComponent(postId)}`);
 }
 
+export interface MastodonTranslation {
+  content: string;
+  /** The language the server detected the original to be in. */
+  detectedSourceLanguage: string;
+  /** Which translation service produced it, e.g. "DeepL". */
+  provider: string;
+}
+
+/**
+ * Translate a post into the reader's language.
+ *
+ * Only available on instances that have configured a translation service; the
+ * rest return 404, which callers should treat as "not offered here" rather than
+ * as a failure.
+ */
+export async function translatePost(
+  postId: string,
+  targetLanguage?: string
+): Promise<MastodonTranslation> {
+  const body = targetLanguage ? { lang: targetLanguage } : {};
+  const raw = await post<any>(`/api/v1/statuses/${encodeURIComponent(postId)}/translate`, body);
+
+  return {
+    content: raw.content ?? '',
+    detectedSourceLanguage: raw.detected_source_language ?? '',
+    provider: raw.provider ?? '',
+  };
+}
+
 export interface MastodonStatusSource {
   id: string;
   /** The original markup the author typed, not the rendered HTML. */
