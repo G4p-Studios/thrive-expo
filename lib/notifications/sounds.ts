@@ -13,13 +13,15 @@ import { createAudioPlayer, setAudioModeAsync, type AudioSource } from 'expo-aud
  */
 export const SOUNDS: {
   mention: string | undefined;
+  directMessage: string | undefined;
   social: string | undefined;
   update: string | undefined;
 } = {
-  // e.g. 'mention.wav' once the file exists and app.json lists it
-  mention: undefined,
-  social: undefined,
-  update: undefined,
+  mention: 'new_mention.wav',
+  directMessage: 'new_dm.wav',
+  // The general-purpose one covers boosts, likes, follows, polls and edits.
+  social: 'new_notification.wav',
+  update: 'new_notification.wav',
 };
 
 /**

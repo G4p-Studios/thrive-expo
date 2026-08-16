@@ -58,7 +58,11 @@
         {
           "icon": "./assets/images/natively-dark.png",
           "color": "#6364FF",
-          "sounds": []
+          "sounds": [
+            "./assets/sounds/new_mention.wav",
+            "./assets/sounds/new_dm.wav",
+            "./assets/sounds/new_notification.wav"
+          ]
         }
       ],
       [

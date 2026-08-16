@@ -57,5 +57,24 @@ JavaScript reload — but a *new file* does need a build, since it is bundled.
 
 ## What is here now
 
-Nothing. The app falls back to the system default notification sound until you
-add files and list them in `app.json`.
+| File | Used for | Length |
+| --- | --- | --- |
+| `new_mention.wav` | Mentions and public replies | 2.1s |
+| `new_dm.wav` | Direct messages | 3.0s |
+| `new_notification.wav` | Boosts, likes, follows, polls, edits | 1.2s |
+
+All three are 44.1kHz 16-bit stereo WAV, well inside the iOS 30-second limit,
+and listed in the `expo-notifications` plugin in `app.json`.
+
+Which sound plays for what is decided in two places:
+
+- `SOUNDS` in `lib/notifications/sounds.ts` maps a name to a file.
+- `lib/notifications/channels.ts` maps a channel to a sound, and
+  `channelFor` in `lib/notifications/poller.ts` decides which channel a given
+  notification belongs to.
+
+A direct message is a `mention` whose status is `direct` — that visibility check
+is the only thing separating the DM sound from the mention sound.
+
+No in-app sounds are set yet: `IN_APP_SOUNDS` is still empty, so
+`playInAppSound` is a no-op until files are registered there.

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { getNotifications, isAuthenticated } from '@/lib/mastodon';
 import type { MastodonNotification } from '@/types/mastodon';
@@ -14,12 +15,16 @@ const MAX_NOTIFICATIONS_PER_CHECK = 5;
 
 /**
  * Which Android channel — and therefore which sound and importance — a
- * notification type belongs to.
+ * notification belongs to.
+ *
+ * Mastodon has no distinct direct-message notification: a DM arrives as a
+ * `mention` whose status is `direct`. Checking the visibility is what separates
+ * a private message from a public reply.
  */
-function channelFor(type: string): ChannelKey {
-  switch (type) {
+function channelFor(notification: MastodonNotification): ChannelKey {
+  switch (notification.type) {
     case 'mention':
-      return 'mentions';
+      return notification.status?.visibility === 'direct' ? 'messages' : 'mentions';
     case 'follow':
     case 'follow_request':
     case 'favourite':
@@ -31,7 +36,16 @@ function channelFor(type: string): ChannelKey {
 }
 
 function soundFor(key: ChannelKey): string | undefined {
-  return key === 'mentions' ? SOUNDS.mention : key === 'social' ? SOUNDS.social : SOUNDS.update;
+  switch (key) {
+    case 'mentions':
+      return SOUNDS.mention;
+    case 'messages':
+      return SOUNDS.directMessage;
+    case 'social':
+      return SOUNDS.social;
+    default:
+      return SOUNDS.update;
+  }
 }
 
 /** Strip HTML and clip, so a notification body is one readable line. */
@@ -47,7 +61,9 @@ function describe(notification: MastodonNotification): { title: string; body: st
 
   switch (notification.type) {
     case 'mention':
-      return { title: `${who} mentioned you`, body: content };
+      return notification.status?.visibility === 'direct'
+        ? { title: `${who} sent you a message`, body: content }
+        : { title: `${who} mentioned you`, body: content };
     case 'reblog':
       return { title: `${who} boosted your post`, body: content };
     case 'favourite':
@@ -119,7 +135,7 @@ export async function checkForNewNotifications(): Promise<number> {
   const toShow = fresh.slice(0, MAX_NOTIFICATIONS_PER_CHECK).reverse();
 
   for (const notification of toShow) {
-    const key = channelFor(notification.type);
+    const key = channelFor(notification);
     const { title, body } = describe(notification);
 
     try {
@@ -134,8 +150,12 @@ export async function checkForNewNotifications(): Promise<number> {
             accountId: notification.account.id,
           },
         },
-        // null means deliver now rather than on a schedule.
-        trigger: null,
+        // A channel-only trigger still delivers immediately, but routes the
+        // notification to the right Android channel — which is what actually
+        // decides its sound and importance on Android 8 and later. A plain
+        // `null` trigger would land on the default channel and ignore all of
+        // that. iOS has no channels, so it takes the immediate path.
+        trigger: Platform.OS === 'android' ? { channelId: channelId(key) } : null,
       });
     } catch (error) {
       console.warn('[Notifications] Could not present a notification:', error);
@@ -151,7 +171,7 @@ export async function checkForNewNotifications(): Promise<number> {
           body: 'Open Thrive to catch up.',
           sound: undefined,
         },
-        trigger: null,
+        trigger: Platform.OS === 'android' ? { channelId: channelId('updates') } : null,
       });
     } catch {
       // Best effort.
@@ -162,5 +182,6 @@ export async function checkForNewNotifications(): Promise<number> {
 }
 
 /** Android channel id for a notification type, exported for testing. */
-export const channelIdFor = (type: string) => channelId(channelFor(type));
+export const channelIdFor = (notification: MastodonNotification) =>
+  channelId(channelFor(notification));
 export { channelFor, describe as describeNotification, preview as previewText };

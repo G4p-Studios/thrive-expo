@@ -14,7 +14,7 @@ import { SOUNDS } from './sounds';
  */
 export const CHANNEL_VERSION = 1;
 
-export type ChannelKey = 'mentions' | 'social' | 'updates';
+export type ChannelKey = 'mentions' | 'messages' | 'social' | 'updates';
 
 interface ChannelSpec {
   key: ChannelKey;
@@ -35,6 +35,13 @@ const CHANNEL_SPECS: ChannelSpec[] = [
     description: 'When somebody mentions you or replies to your post',
     importance: Notifications.AndroidImportance.HIGH,
     sound: SOUNDS.mention,
+  },
+  {
+    key: 'messages',
+    name: 'Direct messages',
+    description: 'When somebody sends you a direct message',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: SOUNDS.directMessage,
   },
   {
     key: 'social',
