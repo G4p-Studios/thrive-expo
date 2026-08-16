@@ -11,6 +11,7 @@ import type {
   MastodonTag,
   MastodonPreviewCard,
   MastodonSuggestion,
+  MastodonEmoji,
   MastodonNotification,
   MastodonList,
   MastodonRelationship,
@@ -128,6 +129,18 @@ export function mapFilterResult(raw: any): MastodonFilterResult {
 }
 
 /**
+ * Map a custom emoji
+ */
+export function mapEmoji(raw: any): MastodonEmoji {
+  return {
+    shortcode: raw.shortcode ?? '',
+    url: raw.url ?? '',
+    staticUrl: raw.static_url ?? raw.url ?? '',
+    visibleInPicker: raw.visible_in_picker !== false,
+  };
+}
+
+/**
  * Map a hashtag
  */
 export function mapTag(raw: any): MastodonTag {
@@ -205,7 +218,7 @@ export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
     filtered: (raw.filtered || []).map(mapFilterResult),
     mentions: (raw.mentions || []).map(mapMention),
     tags: raw.tags,
-    emojis: raw.emojis,
+    emojis: (raw.emojis || []).map(mapEmoji),
   };
 }
 

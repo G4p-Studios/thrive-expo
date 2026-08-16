@@ -9,6 +9,7 @@ import {
   Image,
   ImageSourcePropType,
   Share,
+  Linking,
   AccessibilityInfo,
   ActivityIndicator,
 } from 'react-native';
@@ -18,6 +19,7 @@ import { voteOnPoll } from '@/lib/mastodon';
 import { MastodonPoll, MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import MediaPlayer from '@/components/MediaPlayer';
+import EmojiText, { stripEmojiColons } from '@/components/EmojiText';
 
 // Helper to resolve image sources
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -202,6 +204,15 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     router.push(`/account/${actualPost.account.id}` as any);
   }, [router, actualPost.account.id]);
 
+  const card = actualPost.card;
+
+  const handleCardPress = useCallback(() => {
+    if (!card?.url) return;
+    Linking.openURL(card.url).catch(() => {
+      AccessibilityInfo.announceForAccessibility('Could not open that link');
+    });
+  }, [card]);
+
   const handleShare = useCallback(() => {
     const url = actualPost.url || actualPost.uri;
     if (url) {
@@ -231,7 +242,14 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         hasContentWarning ? 'Post hidden behind a content warning' : 'Post hidden by your filter'
       );
     } else {
-      parts.push(displayContent);
+      parts.push(stripEmojiColons(displayContent, actualPost.emojis));
+      if (card?.title) {
+        parts.push(
+          card.providerName
+            ? `Link: ${card.title}, from ${card.providerName}`
+            : `Link: ${card.title}`
+        );
+      }
     }
 
     // Media descriptions
@@ -286,7 +304,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     if (states.length > 0) parts.push(`You have ${states.join(', ')} this post`);
 
     return parts.join('. ');
-  }, [isBoost, boosterDisplayName, displayName, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes, actualPost.account.acct, warnFilter]);
+  }, [isBoost, boosterDisplayName, displayName, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes, actualPost.account.acct, warnFilter, actualPost.emojis, card]);
 
   // Accessibility actions with dynamic labels
   const accessibilityActions = useMemo(() => {
@@ -319,10 +337,13 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     }
     // Tapping the avatar opens the author's profile; that touchable sits inside
     // the card's accessible node, so surface it as an action too.
+    if (card?.url && !bodyHidden) {
+      actions.push({ name: 'open-link', label: 'Open link' });
+    }
     actions.push({ name: 'profile', label: `View @${actualPost.account.acct}'s profile` });
     actions.push({ name: 'share', label: 'Share' });
     return actions;
-  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed, poll, pollVotable, pollSelection, bodyHidden, actualPost.account.acct, warnFilter, blurFilter]);
+  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed, poll, pollVotable, pollSelection, bodyHidden, actualPost.account.acct, warnFilter, blurFilter, card]);
 
   const onAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
     const action = event.nativeEvent.actionName;
@@ -355,6 +376,9 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
       case 'reveal':
         toggleReveal();
         break;
+      case 'open-link':
+        handleCardPress();
+        break;
       case 'profile':
         handleAccountPress();
         break;
@@ -362,7 +386,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         handleShare();
         break;
     }
-  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, toggleReveal, submitPollVote, handlePollOptionPress, handleAccountPress, pollSelection, reblogged, favourited, bookmarked]);
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, toggleReveal, submitPollVote, handlePollOptionPress, handleAccountPress, handleCardPress, pollSelection, reblogged, favourited, bookmarked]);
 
   //  means exactly that: the server still sent the post (outside home
   // and notifications it does not drop them), so the client removes it.
@@ -472,14 +496,60 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
 
       {/* Content */}
       {!bodyHidden && (
-        <Text
-          style={[styles.content, { color: theme.text }]}
+        <View accessible={false} importantForAccessibility="no-hide-descendants">
+          <EmojiText
+            text={displayContent}
+            emojis={actualPost.emojis}
+            style={[styles.content, { color: theme.text }]}
+            size={16}
+          />
+        </View>
+      )}
+
+      {/* Link preview */}
+      {!bodyHidden && card && card.url ? (
+        <TouchableOpacity
+          style={[styles.card, { borderColor: theme.border, backgroundColor: theme.background }]}
+          onPress={handleCardPress}
           accessible={false}
           importantForAccessibility="no-hide-descendants"
         >
-          {displayContent}
-        </Text>
-      )}
+          {card.image ? (
+            <Image
+              source={{ uri: card.image }}
+              style={[styles.cardImage, { backgroundColor: theme.card }]}
+              accessible={false}
+            />
+          ) : null}
+          <View style={styles.cardText} accessible={false}>
+            {card.providerName ? (
+              <Text
+                style={[styles.cardProvider, { color: theme.textSecondary }]}
+                numberOfLines={1}
+                accessible={false}
+              >
+                {card.providerName}
+              </Text>
+            ) : null}
+            <Text
+              style={[styles.cardTitle, { color: theme.text }]}
+              numberOfLines={2}
+              accessible={false}
+            >
+              {card.title || card.url}
+            </Text>
+            {card.description ? (
+              <Text
+                style={[styles.cardDescription, { color: theme.textSecondary }]}
+                numberOfLines={2}
+                accessible={false}
+              >
+                {card.description}
+              </Text>
+            ) : null}
+          </View>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Poll */}
       {poll && !bodyHidden && (
@@ -777,6 +847,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  card: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  cardImage: { width: '100%', height: 150 },
+  cardText: { padding: 12, gap: 3 },
+  cardProvider: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardTitle: { fontSize: 15, fontWeight: '600', lineHeight: 20 },
+  cardDescription: { fontSize: 13, lineHeight: 18 },
   pollContainer: {
     marginTop: 10,
     gap: 8,

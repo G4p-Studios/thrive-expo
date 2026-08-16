@@ -69,7 +69,7 @@ export interface MastodonPost {
   filtered?: MastodonFilterResult[];
   mentions?: MastodonMention[];
   tags?: any[];
-  emojis?: any[];
+  emojis?: MastodonEmoji[];
 }
 
 export interface MastodonList {
