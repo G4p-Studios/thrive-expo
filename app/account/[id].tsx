@@ -35,6 +35,8 @@ import {
   bookmark,
   unbookmark,
   stripHtml,
+  blockDomain,
+  unblockDomain,
 } from '@/lib/mastodon';
 import type { MastodonAccount, MastodonPost, MastodonRelationship } from '@/types/mastodon';
 
@@ -45,7 +47,7 @@ function formatCount(value?: number): string {
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
-type PendingAction = 'block' | 'mute' | null;
+type PendingAction = 'block' | 'mute' | 'domain' | null;
 
 export default function AccountScreen() {
   const colorScheme = useColorScheme();
@@ -200,6 +202,33 @@ export default function AccountScreen() {
     }
   }, [account, relationship, busy, showError]);
 
+  const handleToggleDomainBlock = useCallback(async () => {
+    if (!account || busy) return;
+
+    // `acct` only carries a domain for accounts hosted elsewhere; there is no
+    // sense in blocking your own server.
+    const domain = account.acct.includes('@') ? account.acct.split('@')[1] : null;
+    if (!domain) return;
+
+    const wasBlocked = !!relationship?.domainBlocking;
+    setBusy(true);
+    try {
+      if (wasBlocked) {
+        await unblockDomain(domain);
+      } else {
+        await blockDomain(domain);
+      }
+      setRelationship(prev => (prev ? { ...prev, domainBlocking: !wasBlocked } : prev));
+      // Blocking the domain hides everything from it, including this timeline.
+      if (!wasBlocked) setPosts([]);
+    } catch (error: any) {
+      showError(error.message || `Could not update the block on ${domain}`);
+    } finally {
+      setBusy(false);
+      setConfirming(null);
+    }
+  }, [account, relationship, busy, showError]);
+
   const handleReblog = useCallback(async (postId: string, currentState: boolean) => {
     updatePost(postId, p => ({
       ...p,
@@ -258,6 +287,9 @@ export default function AccountScreen() {
   }, [router]);
 
   const isSelf = !!currentAccountId && account?.id === currentAccountId;
+  // Present only for accounts hosted on another server.
+  const accountDomain =
+    account?.acct.includes('@') ? account.acct.split('@')[1] : null;
   const bio = account?.note ? stripHtml(account.note) : '';
 
   const followLabel = relationship?.blocking
@@ -544,6 +576,27 @@ export default function AccountScreen() {
             destructive: true,
             onPress: () => setReportVisible(true),
           },
+          // Only offered for accounts on another server.
+          ...(accountDomain
+            ? [
+                {
+                  key: 'domain',
+                  label: relationship?.domainBlocking
+                    ? `Unblock ${accountDomain}`
+                    : `Block ${accountDomain}`,
+                  hint: relationship?.domainBlocking
+                    ? 'See this server again'
+                    : `Hide everyone on ${accountDomain}, not just this account`,
+                  ios: 'server.rack',
+                  android: 'dns',
+                  destructive: !relationship?.domainBlocking,
+                  onPress: () =>
+                    relationship?.domainBlocking
+                      ? handleToggleDomainBlock()
+                      : setConfirming('domain'),
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -565,12 +618,18 @@ export default function AccountScreen() {
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]} accessibilityRole="header">
-              {confirming === 'block' ? 'Block this account?' : 'Mute this account?'}
+              {confirming === 'domain'
+                ? `Block everyone on ${accountDomain}?`
+                : confirming === 'block'
+                  ? 'Block this account?'
+                  : 'Mute this account?'}
             </Text>
             <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
-              {confirming === 'block'
-                ? `@${account?.acct} will not be able to follow you or see your posts, and you will not see theirs. They are not told.`
-                : `You will stop seeing posts from @${account?.acct} in your timelines. They are not told, and you stay connected.`}
+              {confirming === 'domain'
+                ? `This hides every account on ${accountDomain}, not just @${account?.acct}. Any followers you have there are removed, and unblocking later does not bring them back.`
+                : confirming === 'block'
+                  ? `@${account?.acct} will not be able to follow you or see your posts, and you will not see theirs. They are not told.`
+                  : `You will stop seeing posts from @${account?.acct} in your timelines. They are not told, and you stay connected.`}
             </Text>
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -584,18 +643,34 @@ export default function AccountScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, { backgroundColor: theme.error, borderColor: theme.error }]}
-                onPress={confirming === 'block' ? handleToggleBlock : handleToggleMute}
+                onPress={
+                  confirming === 'domain'
+                    ? handleToggleDomainBlock
+                    : confirming === 'block'
+                      ? handleToggleBlock
+                      : handleToggleMute
+                }
                 disabled={busy}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel={confirming === 'block' ? 'Block' : 'Mute'}
+                accessibilityLabel={
+                  confirming === 'domain'
+                    ? `Block ${accountDomain}`
+                    : confirming === 'block'
+                      ? 'Block'
+                      : 'Mute'
+                }
                 accessibilityState={{ disabled: busy }}
               >
                 {busy ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
-                    {confirming === 'block' ? 'Block' : 'Mute'}
+                    {confirming === 'domain'
+                      ? 'Block server'
+                      : confirming === 'block'
+                        ? 'Block'
+                        : 'Mute'}
                   </Text>
                 )}
               </TouchableOpacity>

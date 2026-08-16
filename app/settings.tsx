@@ -278,6 +278,39 @@ export default function SettingsScreen() {
               color={theme.textSecondary}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={() => router.push('/blocked-domains' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Blocked servers"
+            accessibilityHint="Double tap to see and unblock entire servers you have blocked"
+          >
+            <View style={styles.settingInfo}>
+              <IconSymbol
+                ios_icon_name="server.rack"
+                android_material_icon_name="dns"
+                size={24}
+                color={theme.primary}
+                style={{ marginRight: 16 }}
+              />
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>
+                  Blocked servers
+                </Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Whole servers hidden from you
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* About Section */}

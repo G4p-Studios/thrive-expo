@@ -62,3 +62,4 @@ export * from './endpoints/media';
 export * from './endpoints/instance';
 export * from './endpoints/polls';
 export * from './endpoints/reports';
+export * from './endpoints/domainBlocks';
