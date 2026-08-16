@@ -13,7 +13,7 @@ import {
   Modal,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
-import ComposeModal from '@/components/ComposeModal';
+import ComposeModal, { ComposeSubmission } from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
 import {
   getReplyTarget,
@@ -94,11 +94,11 @@ export default function PostDetailScreen() {
     }
   }, [threadItems]);
 
-  const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
+  const handleSubmitPost = async (content: string, submission: ComposeSubmission) => {
     try {
       await createPost(content, {
         inReplyToId: replyToPost ? getReplyTarget(replyToPost).id : undefined,
-        mediaIds,
+        ...submission,
       });
       setComposeVisible(false);
       setReplyToPost(undefined);

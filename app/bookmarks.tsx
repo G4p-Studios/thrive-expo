@@ -13,7 +13,7 @@ import {
   Modal,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
-import ComposeModal from '@/components/ComposeModal';
+import ComposeModal, { ComposeSubmission } from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
 import React, { useState, useEffect, useCallback } from 'react';
 import { MastodonPost } from '@/types/mastodon';
@@ -83,12 +83,12 @@ export default function BookmarksScreen() {
     }
   };
 
-  const handleSubmitPost = async (content: string) => {
+  const handleSubmitPost = async (content: string, submission: ComposeSubmission) => {
     try {
       console.log('Submitting reply:', content, 'to post:', replyToPost?.id);
 
       if (replyToPost) {
-        await createPost(content, { inReplyToId: getReplyTarget(replyToPost).id });
+        await createPost(content, { inReplyToId: getReplyTarget(replyToPost).id, ...submission });
         console.log('Reply submitted successfully');
       }
 

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
-import ComposeModal from '@/components/ComposeModal';
+import ComposeModal, { ComposeSubmission } from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MastodonPost } from '@/types/mastodon';
@@ -105,11 +105,11 @@ export default function HomeScreen() {
     setComposeVisible(true);
   };
 
-  const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
+  const handleSubmitPost = async (content: string, submission: ComposeSubmission) => {
     try {
       await createPost(content, {
         inReplyToId: replyToPost ? getReplyTarget(replyToPost).id : undefined,
-        mediaIds,
+        ...submission,
       });
 
       setComposeVisible(false);

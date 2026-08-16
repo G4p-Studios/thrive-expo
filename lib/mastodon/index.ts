@@ -8,6 +8,8 @@ export {
   setInstanceUrl,
   getAccountCache,
   setAccountCache,
+  getInstanceConfigCache,
+  setInstanceConfigCache,
   clearAuth,
   clearOAuthApps,
   isAuthenticated,
@@ -37,6 +39,9 @@ export {
   getReplyTarget,
 } from './mentions';
 
+// Status length
+export { countStatusCharacters, countableText } from './statusLength';
+
 // Endpoints
 export * from './endpoints/timelines';
 export * from './endpoints/statuses';
@@ -45,3 +50,4 @@ export * from './endpoints/notifications';
 export * from './endpoints/lists';
 export * from './endpoints/search';
 export * from './endpoints/media';
+export * from './endpoints/instance';

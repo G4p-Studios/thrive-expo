@@ -113,6 +113,23 @@ export interface MastodonPoll {
   }>;
 }
 
+/**
+ * The subset of `GET /api/v2/instance` → `configuration` that the client acts on.
+ * Every instance can raise or lower these, so nothing here should be hardcoded.
+ */
+export interface MastodonInstanceConfig {
+  maxCharacters: number;
+  maxMediaAttachments: number;
+  /** Every URL counts as this many characters regardless of its real length. */
+  charactersReservedPerUrl: number;
+  maxPollOptions: number;
+  maxPollOptionChars: number;
+  /** MIME types the instance accepts for uploads; empty when the server omits it. */
+  supportedMimeTypes: string[];
+  imageSizeLimit: number;
+  videoSizeLimit: number;
+}
+
 export interface MastodonEmoji {
   shortcode: string;
   url: string;

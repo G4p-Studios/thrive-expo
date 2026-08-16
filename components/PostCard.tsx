@@ -1,5 +1,5 @@
 
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -74,6 +74,24 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
   };
 
   const displayContent = stripHtml(actualPost.content);
+
+  // A content warning hides the body and any media until the reader opts in.
+  // `sensitive` on its own only covers the media, which is how Mastodon
+  // itself treats the two flags.
+  const spoilerText = actualPost.spoilerText?.trim() || '';
+  const hasContentWarning = spoilerText.length > 0;
+  const hasSensitiveMedia = !!actualPost.sensitive;
+  const [revealed, setRevealed] = useState(false);
+
+  const bodyHidden = hasContentWarning && !revealed;
+  const mediaHidden = (hasContentWarning || hasSensitiveMedia) && !revealed;
+
+  const toggleReveal = useCallback(() => {
+    const next = !revealed;
+    setRevealed(next);
+    AccessibilityInfo.announceForAccessibility(next ? 'Content shown' : 'Content hidden');
+  }, [revealed]);
+
   const displayName = actualPost.account.displayName || actualPost.account.username;
   const username = actualPost.account.username;
   const boosterDisplayName = booster ? (booster.displayName || booster.username) : '';
@@ -123,13 +141,28 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
 
     parts.push(`${displayName}, @${username}, ${timeAgo}`);
 
-    parts.push(displayContent);
+    if (hasContentWarning) {
+      parts.push(`Content warning: ${spoilerText}`);
+    }
+
+    // Never read out content the author asked to keep behind a warning.
+    if (bodyHidden) {
+      parts.push('Post hidden behind a content warning');
+    } else {
+      parts.push(displayContent);
+    }
 
     // Media descriptions
     const media = actualPost.mediaAttachments;
     if (media && media.length > 0) {
-      const descs = media.slice(0, 4).map((m, i) => m.description || `Image ${i + 1}`);
-      parts.push(`${media.length} attachment${media.length > 1 ? 's' : ''}: ${descs.join(', ')}`);
+      if (mediaHidden) {
+        parts.push(
+          `${media.length} hidden attachment${media.length > 1 ? 's' : ''}`
+        );
+      } else {
+        const descs = media.slice(0, 4).map((m, i) => m.description || `Image ${i + 1}`);
+        parts.push(`${media.length} attachment${media.length > 1 ? 's' : ''}: ${descs.join(', ')}`);
+      }
     }
 
     // Interaction counts
@@ -147,7 +180,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     if (states.length > 0) parts.push(`You have ${states.join(', ')} this post`);
 
     return parts.join('. ');
-  }, [isBoost, boosterDisplayName, displayName, username, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked]);
+  }, [isBoost, boosterDisplayName, displayName, username, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden]);
 
   // Accessibility actions with dynamic labels
   const accessibilityActions = useMemo(() => {
@@ -159,9 +192,14 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     if (onBookmark) {
       actions.push({ name: 'bookmark', label: bookmarked ? 'Remove bookmark' : 'Bookmark' });
     }
+    // The reveal control is a nested button, which the card's own
+    // accessible={true} would otherwise swallow — expose it as an action.
+    if (hasContentWarning || hasSensitiveMedia) {
+      actions.push({ name: 'reveal', label: revealed ? 'Hide content' : 'Show content' });
+    }
     actions.push({ name: 'share', label: 'Share' });
     return actions;
-  }, [reblogged, favourited, bookmarked, onBookmark]);
+  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed]);
 
   const onAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
     switch (event.nativeEvent.actionName) {
@@ -180,11 +218,14 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         handleBookmark();
         AccessibilityInfo.announceForAccessibility(bookmarked ? 'Bookmark removed' : 'Bookmarked');
         break;
+      case 'reveal':
+        toggleReveal();
+        break;
       case 'share':
         handleShare();
         break;
     }
-  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, reblogged, favourited, bookmarked]);
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, toggleReveal, reblogged, favourited, bookmarked]);
 
   return (
     <TouchableOpacity
@@ -260,31 +301,78 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         </Text>
       </View>
 
+      {/* Content warning */}
+      {hasContentWarning && (
+        <View
+          style={[styles.cwContainer, { backgroundColor: theme.background, borderColor: theme.border }]}
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+        >
+          <Text style={[styles.cwText, { color: theme.text }]} accessible={false}>
+            {spoilerText}
+          </Text>
+          <TouchableOpacity
+            onPress={toggleReveal}
+            style={[styles.cwButton, { borderColor: theme.border }]}
+            accessible={false}
+          >
+            <Text style={[styles.cwButtonText, { color: theme.primary }]} accessible={false}>
+              {revealed ? 'Hide' : 'Show more'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Content */}
-      <Text
-        style={[styles.content, { color: theme.text }]}
-        accessible={false}
-        importantForAccessibility="no-hide-descendants"
-      >
-        {displayContent}
-      </Text>
+      {!bodyHidden && (
+        <Text
+          style={[styles.content, { color: theme.text }]}
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+        >
+          {displayContent}
+        </Text>
+      )}
 
       {/* Media attachments */}
       {actualPost.mediaAttachments && actualPost.mediaAttachments.length > 0 && (
-        <View style={styles.mediaContainer} importantForAccessibility="no-hide-descendants">
-          {actualPost.mediaAttachments.slice(0, 4).map((media, index) => (
-            media.type === 'video' || media.type === 'gifv' || media.type === 'audio' ? (
-              <MediaPlayer key={media.id || index} attachment={media} />
-            ) : (
-              <Image
-                key={media.id || index}
-                source={resolveImageSource(media.url)}
-                style={styles.mediaImage}
-                accessible={false}
-              />
-            )
-          ))}
-        </View>
+        mediaHidden ? (
+          <TouchableOpacity
+            style={[styles.sensitiveCover, { backgroundColor: theme.card, borderColor: theme.border }]}
+            onPress={toggleReveal}
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+          >
+            <IconSymbol
+              ios_icon_name="eye.slash"
+              android_material_icon_name="visibility-off"
+              size={26}
+              color={theme.textSecondary}
+              accessible={false}
+            />
+            <Text style={[styles.sensitiveCoverText, { color: theme.textSecondary }]} accessible={false}>
+              {hasContentWarning ? 'Media hidden' : 'Sensitive content'}
+            </Text>
+            <Text style={[styles.sensitiveCoverHint, { color: theme.primary }]} accessible={false}>
+              Tap to show
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.mediaContainer} importantForAccessibility="no-hide-descendants">
+            {actualPost.mediaAttachments.slice(0, 4).map((media, index) => (
+              media.type === 'video' || media.type === 'gifv' || media.type === 'audio' ? (
+                <MediaPlayer key={media.id || index} attachment={media} />
+              ) : (
+                <Image
+                  key={media.id || index}
+                  source={resolveImageSource(media.url)}
+                  style={styles.mediaImage}
+                  accessible={false}
+                />
+              )
+            ))}
+          </View>
+        )
       )}
 
       {/* Actions - hidden from accessibility tree, visual only */}
@@ -401,11 +489,56 @@ export default memo(PostCard, (prevProps, nextProps) => {
     prevPost.reblogsCount === nextPost.reblogsCount &&
     prevPost.favouritesCount === nextPost.favouritesCount &&
     prevPost.content === nextPost.content &&
+    prevPost.spoilerText === nextPost.spoilerText &&
+    prevPost.sensitive === nextPost.sensitive &&
     prevPost.repliesCount === nextPost.repliesCount
   );
 });
 
 const styles = StyleSheet.create({
+  cwContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  cwText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  cwButton: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  cwButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  sensitiveCover: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 28,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  sensitiveCoverText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  sensitiveCoverHint: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
   container: {
     borderRadius: 12,
     padding: 16,

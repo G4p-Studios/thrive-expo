@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import type { MastodonAccount } from '@/types/mastodon';
+import type { MastodonAccount, MastodonInstanceConfig } from '@/types/mastodon';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   INSTANCE_URL: 'thrive_instance_url',
   OAUTH_APPS: 'thrive_oauth_apps',
   ACCOUNT_CACHE: 'thrive_account_cache',
+  INSTANCE_CONFIG: 'thrive_instance_config',
 } as const;
 
 export interface OAuthCredentials {
@@ -124,11 +125,30 @@ export async function setAccountCache(account: MastodonAccount): Promise<void> {
   console.log('[Storage] Account cache stored');
 }
 
+// Instance configuration cache (posting limits, upload limits)
+export async function getInstanceConfigCache(): Promise<MastodonInstanceConfig | null> {
+  const cacheJson = await getItem(STORAGE_KEYS.INSTANCE_CONFIG);
+  if (!cacheJson) return null;
+
+  try {
+    return JSON.parse(cacheJson);
+  } catch {
+    return null;
+  }
+}
+
+export async function setInstanceConfigCache(config: MastodonInstanceConfig): Promise<void> {
+  await setItem(STORAGE_KEYS.INSTANCE_CONFIG, JSON.stringify(config));
+  console.log('[Storage] Instance config cached');
+}
+
 // Clear all auth data
 export async function clearAuth(): Promise<void> {
   await removeItem(STORAGE_KEYS.ACCESS_TOKEN);
   await removeItem(STORAGE_KEYS.INSTANCE_URL);
   await removeItem(STORAGE_KEYS.ACCOUNT_CACHE);
+  // Limits belong to the instance we just disconnected from.
+  await removeItem(STORAGE_KEYS.INSTANCE_CONFIG);
   // Note: We keep OAUTH_APPS so user doesn't need to re-register on reconnect
   console.log('[Storage] Auth data cleared');
 }

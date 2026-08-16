@@ -14,7 +14,7 @@ import {
   Modal,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
-import ComposeModal from '@/components/ComposeModal';
+import ComposeModal, { ComposeSubmission } from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
 import {
   getReplyTarget,
@@ -87,12 +87,12 @@ export default function ListTimelineScreen() {
     }
   };
 
-  const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
+  const handleSubmitPost = async (content: string, submission: ComposeSubmission) => {
     try {
       console.log('Submitting reply:', content, 'to post:', replyToPost?.id);
 
       if (replyToPost) {
-        await createPost(content, { inReplyToId: getReplyTarget(replyToPost).id, mediaIds });
+        await createPost(content, { inReplyToId: getReplyTarget(replyToPost).id, ...submission });
         console.log('Reply submitted successfully');
       }
 
