@@ -56,13 +56,16 @@ export default function FloatingTabBar({
 
     tabs.forEach((tab, index) => {
       let score = 0;
+      // Href is a union that also allows an object form; these tabs always use
+      // the string form, so narrow once here rather than at each comparison.
+      const route = tab.route as string;
 
       // Exact route match gets highest score
-      if (pathname === tab.route) {
+      if (pathname === route) {
         score = 100;
       }
       // Check if pathname starts with tab route (for nested routes)
-      else if (pathname.startsWith(tab.route as string)) {
+      else if (pathname.startsWith(route)) {
         score = 80;
       }
       // Check if pathname contains the tab name
@@ -70,7 +73,7 @@ export default function FloatingTabBar({
         score = 60;
       }
       // Check for partial matches in the route
-      else if (tab.route.includes('/(tabs)/') && pathname.includes(tab.route.split('/(tabs)/')[1])) {
+      else if (route.includes('/(tabs)/') && pathname.includes(route.split('/(tabs)/')[1])) {
         score = 40;
       }
 
@@ -228,7 +231,7 @@ const styles = StyleSheet.create({
     // borderRadius and other styling applied dynamically
   },
   background: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     // Dynamic styling applied in component
   },
   indicator: {

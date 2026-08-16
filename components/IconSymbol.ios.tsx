@@ -8,11 +8,8 @@ export function IconSymbol({
   color,
   style,
   weight = "regular",
-  onPress,
-  onClick,
-  onMouseOver,
-  onMouseLeave,
   testID,
+  accessible,
   accessibilityLabel,
 }: {
   ios_icon_name: SymbolViewProps["name"];
@@ -21,20 +18,14 @@ export function IconSymbol({
   color: string;
   style?: StyleProp<ViewStyle>;
   weight?: SymbolWeight;
-  onPress?: any;
-  onClick?: any;
-  onMouseOver?: any;
-  onMouseLeave?: any;
   testID?: any;
+  accessible?: boolean;
   accessibilityLabel?: any;
 }) {
   return (
     <SymbolView
-      onPress={onPress}
-      onClick={onClick}
-      onMouseOver={onMouseOver}
-      onMouseLeave={onMouseLeave}
       testID={testID}
+      accessible={accessible}
       accessibilityLabel={accessibilityLabel}
       weight={weight}
       tintColor={color}

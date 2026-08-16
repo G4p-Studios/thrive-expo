@@ -95,22 +95,24 @@ export default function NotificationsScreen() {
     }
   };
 
+  // `as const` keeps the Material icon names as literals so they satisfy
+  // IconSymbol's glyph-name union instead of widening to `string`.
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'mention':
-        return { ios: 'at', android: 'alternate-email' };
+        return { ios: 'at', android: 'alternate-email' } as const;
       case 'reblog':
-        return { ios: 'arrow.2.squarepath', android: 'repeat' };
+        return { ios: 'arrow.2.squarepath', android: 'repeat' } as const;
       case 'favourite':
-        return { ios: 'heart.fill', android: 'favorite' };
+        return { ios: 'heart.fill', android: 'favorite' } as const;
       case 'follow':
-        return { ios: 'person.badge.plus', android: 'person-add' };
+        return { ios: 'person.badge.plus', android: 'person-add' } as const;
       case 'poll':
-        return { ios: 'chart.bar', android: 'poll' };
+        return { ios: 'chart.bar', android: 'poll' } as const;
       case 'status':
-        return { ios: 'bell.fill', android: 'notifications' };
+        return { ios: 'bell.fill', android: 'notifications' } as const;
       default:
-        return { ios: 'bell', android: 'notifications' };
+        return { ios: 'bell', android: 'notifications' } as const;
     }
   };
 

@@ -57,7 +57,6 @@ export default function ListItem({ listId }: { listId: string }) {
         rightThreshold={40}
         renderRightActions={RightAction}
         overshootRight={false}
-        enableContextMenu
       >
         <View style={styles.listItemContainer}>
           <Text style={[styles.listItemText, { color: isDark ? "#FFFFFF" : "#000000" }]}>{listId}</Text>

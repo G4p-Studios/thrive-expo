@@ -2,6 +2,7 @@ import type {
   MastodonAccount,
   MastodonPost,
   MastodonMediaAttachment,
+  MastodonMention,
   MastodonNotification,
   MastodonList,
   MastodonRelationship,
@@ -15,6 +16,9 @@ export function mapAccount(raw: any, instanceUrl: string = ''): MastodonAccount 
   return {
     id: raw.id,
     username: raw.username,
+    // Local accounts come back with `acct === username`; remote ones carry the
+    // domain. Fall back to `username` only if the server omitted `acct`.
+    acct: raw.acct || raw.username,
     displayName: raw.display_name || raw.username,
     avatar: raw.avatar,
     instanceUrl,
@@ -46,6 +50,18 @@ export function mapMediaAttachment(raw: any): MastodonMediaAttachment {
 }
 
 /**
+ * Map a mention entry attached to a status
+ */
+export function mapMention(raw: any): MastodonMention {
+  return {
+    id: raw.id,
+    username: raw.username,
+    acct: raw.acct || raw.username,
+    url: raw.url,
+  };
+}
+
+/**
  * Map Mastodon API status/post response to app type
  */
 export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
@@ -73,7 +89,7 @@ export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
     card: raw.card,
     poll: raw.poll,
     application: raw.application,
-    mentions: raw.mentions,
+    mentions: (raw.mentions || []).map(mapMention),
     tags: raw.tags,
     emojis: raw.emojis,
   };

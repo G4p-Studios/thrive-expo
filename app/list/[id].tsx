@@ -17,6 +17,7 @@ import { colors } from '@/styles/commonStyles';
 import ComposeModal from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
 import {
+  getReplyTarget,
   getListTimeline,
   createPost,
   favourite,
@@ -42,8 +43,7 @@ export default function ListTimelineScreen() {
   const [composeVisible, setComposeVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
-  const [replyToPostId, setReplyToPostId] = useState<string | undefined>(undefined);
-  const [replyToUsername, setReplyToUsername] = useState<string | undefined>(undefined);
+  const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
@@ -82,24 +82,22 @@ export default function ListTimelineScreen() {
     const post = posts.find(p => p.id === postId);
     if (post) {
       console.log('Opening reply composer for:', post.account.username);
-      setReplyToPostId(postId);
-      setReplyToUsername(post.account.username);
+      setReplyToPost(post);
       setComposeVisible(true);
     }
   };
 
   const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
     try {
-      console.log('Submitting reply:', content, 'to post:', replyToPostId);
+      console.log('Submitting reply:', content, 'to post:', replyToPost?.id);
 
-      if (replyToPostId) {
-        await createPost(content, { inReplyToId: replyToPostId, mediaIds });
+      if (replyToPost) {
+        await createPost(content, { inReplyToId: getReplyTarget(replyToPost).id, mediaIds });
         console.log('Reply submitted successfully');
       }
 
       setComposeVisible(false);
-      setReplyToPostId(undefined);
-      setReplyToUsername(undefined);
+      setReplyToPost(undefined);
     } catch (error: any) {
       console.error('Failed to submit reply:', error);
       setErrorMessage(error.message || 'Failed to post');
@@ -280,12 +278,10 @@ export default function ListTimelineScreen() {
         visible={composeVisible}
         onClose={() => {
           setComposeVisible(false);
-          setReplyToPostId(undefined);
-          setReplyToUsername(undefined);
+          setReplyToPost(undefined);
         }}
         onSubmit={handleSubmitPost}
-        replyToId={replyToPostId}
-        replyToUsername={replyToUsername}
+        replyToPost={replyToPost}
       />
 
       {/* Error Modal */}

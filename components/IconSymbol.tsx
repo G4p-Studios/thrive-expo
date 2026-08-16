@@ -27,6 +27,7 @@ export function IconSymbol({
   onMouseOver,
   onMouseLeave,
   testID,
+  accessible,
   accessibilityLabel,
 }: {
   ios_icon_name?: string | undefined;
@@ -40,6 +41,7 @@ export function IconSymbol({
   onMouseOver?: any;
   onMouseLeave?: any;
   testID?: any;
+  accessible?: boolean;
   accessibilityLabel?: any;
 }) {
   return (
@@ -49,6 +51,7 @@ export function IconSymbol({
       onMouseOver={onMouseOver}
       onMouseLeave={onMouseLeave}
       testID={testID}
+      accessible={accessible}
       accessibilityLabel={accessibilityLabel}
       color={color}
       size={size}

@@ -30,6 +30,13 @@ export {
   uploadFormData,
 } from './client';
 
+// Mentions
+export {
+  buildReplyMentions,
+  formatMentionPrefix,
+  getReplyTarget,
+} from './mentions';
+
 // Endpoints
 export * from './endpoints/timelines';
 export * from './endpoints/statuses';

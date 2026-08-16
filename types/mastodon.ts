@@ -1,7 +1,14 @@
 
 export interface MastodonAccount {
   id: string;
+  /** Short, local-only name (`alex`). Not unique across the fediverse. */
   username: string;
+  /**
+   * Webfinger handle: `alex` for accounts on the current instance,
+   * `alex@example.social` for everyone else. This is the form Mastodon
+   * resolves when it parses `@mentions` out of a status.
+   */
+  acct: string;
   displayName: string;
   avatar: string;
   instanceUrl: string;
@@ -24,6 +31,14 @@ export interface MastodonMediaAttachment {
   description?: string;
   previewUrl?: string;
   blurhash?: string;
+}
+
+export interface MastodonMention {
+  id: string;
+  username: string;
+  /** Full webfinger handle — see {@link MastodonAccount.acct}. */
+  acct: string;
+  url: string;
 }
 
 export interface MastodonPost {
@@ -50,7 +65,7 @@ export interface MastodonPost {
   card?: any;
   poll?: any;
   application?: any;
-  mentions?: any[];
+  mentions?: MastodonMention[];
   tags?: any[];
   emojis?: any[];
 }

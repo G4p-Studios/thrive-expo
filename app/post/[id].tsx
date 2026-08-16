@@ -16,6 +16,7 @@ import { colors } from '@/styles/commonStyles';
 import ComposeModal from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
 import {
+  getReplyTarget,
   getPost,
   getPostContext,
   createPost,
@@ -45,8 +46,7 @@ export default function PostDetailScreen() {
   const [composeVisible, setComposeVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
-  const [replyToPostId, setReplyToPostId] = useState<string | undefined>(undefined);
-  const [replyToUsername, setReplyToUsername] = useState<string | undefined>(undefined);
+  const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
@@ -89,8 +89,7 @@ export default function PostDetailScreen() {
   const handleReply = useCallback((postId: string) => {
     const item = threadItems.find(i => i.post.id === postId);
     if (item) {
-      setReplyToPostId(postId);
-      setReplyToUsername(item.post.account.username);
+      setReplyToPost(item.post);
       setComposeVisible(true);
     }
   }, [threadItems]);
@@ -98,12 +97,11 @@ export default function PostDetailScreen() {
   const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
     try {
       await createPost(content, {
-        inReplyToId: replyToPostId,
+        inReplyToId: replyToPost ? getReplyTarget(replyToPost).id : undefined,
         mediaIds,
       });
       setComposeVisible(false);
-      setReplyToPostId(undefined);
-      setReplyToUsername(undefined);
+      setReplyToPost(undefined);
       loadThread();
     } catch (error: any) {
       setErrorMessage(error.message || 'Failed to post');
@@ -246,12 +244,10 @@ export default function PostDetailScreen() {
         visible={composeVisible}
         onClose={() => {
           setComposeVisible(false);
-          setReplyToPostId(undefined);
-          setReplyToUsername(undefined);
+          setReplyToPost(undefined);
         }}
         onSubmit={handleSubmitPost}
-        replyToId={replyToPostId}
-        replyToUsername={replyToUsername}
+        replyToPost={replyToPost}
       />
 
       {/* Error Modal */}

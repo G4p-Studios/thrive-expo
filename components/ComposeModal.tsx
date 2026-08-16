@@ -20,19 +20,25 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-import { uploadMedia } from '@/lib/mastodon';
-import { MastodonMediaAttachment } from '@/types/mastodon';
+import {
+  uploadMedia,
+  buildReplyMentions,
+  formatMentionPrefix,
+  getReplyTarget,
+  getAccountCache,
+} from '@/lib/mastodon';
+import { MastodonMediaAttachment, MastodonPost } from '@/types/mastodon';
 import AudioRecorder from '@/components/AudioRecorder';
 
 interface ComposeModalProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (content: string, mediaIds?: string[]) => Promise<void>;
-  replyToId?: string;
-  replyToUsername?: string;
+  /** The post being replied to, if any. Boosts are unwrapped automatically. */
+  replyToPost?: MastodonPost;
 }
 
-export default function ComposeModal({ visible, onClose, onSubmit, replyToId, replyToUsername }: ComposeModalProps) {
+export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }: ComposeModalProps) {
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? colors.dark : colors.light;
 
@@ -44,14 +50,31 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToId, re
   const [audioRecorderVisible, setAudioRecorderVisible] = useState(false);
   const insets = useSafeAreaInsets();
 
-  // Pre-fill with @username when replying
+  // Pre-fill the reply with the full handles of everyone in the thread.
   React.useEffect(() => {
-    if (visible && replyToUsername && replyToId) {
-      setContent(`@${replyToUsername} `);
-    } else if (visible && !replyToId) {
-      setContent('');
-    }
-  }, [visible, replyToUsername, replyToId]);
+    if (!visible) return;
+
+    let cancelled = false;
+
+    (async () => {
+      if (!replyToPost) {
+        if (!cancelled) setContent('');
+        return;
+      }
+
+      // Our own handle is dropped from the prefill; read it from the cache the
+      // OAuth flow populates so opening the composer stays offline-fast.
+      const self = await getAccountCache();
+      if (cancelled) return;
+
+      const handles = buildReplyMentions(replyToPost, self?.acct || self?.username);
+      setContent(formatMentionPrefix(handles));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, replyToPost]);
 
   const handleSubmit = async () => {
     if (!content.trim() && mediaAttachments.length === 0) {
@@ -168,7 +191,9 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToId, re
   const isOverLimit = characterCount > maxCharacters;
   const canSubmit = (content.trim() || mediaAttachments.length > 0) && !isOverLimit && !loading && !uploadingMedia;
 
-  const title = replyToId ? `Reply to @${replyToUsername}` : 'New Post';
+  const title = replyToPost
+    ? `Reply to @${getReplyTarget(replyToPost).account.acct}`
+    : 'New Post';
 
   return (
     <Modal

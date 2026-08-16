@@ -18,6 +18,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import {
+  getReplyTarget,
   isAuthenticated,
   getHomeTimeline,
   createPost,
@@ -39,8 +40,7 @@ export default function HomeScreen() {
   const [isConnected, setIsConnected] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
-  const [replyToPostId, setReplyToPostId] = useState<string | undefined>(undefined);
-  const [replyToUsername, setReplyToUsername] = useState<string | undefined>(undefined);
+  const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
@@ -108,24 +108,22 @@ export default function HomeScreen() {
 
   const handleCompose = () => {
     console.log('User tapped compose button');
-    setReplyToPostId(undefined);
-    setReplyToUsername(undefined);
+    setReplyToPost(undefined);
     setComposeVisible(true);
   };
 
   const handleSubmitPost = async (content: string, mediaIds?: string[]) => {
     try {
-      console.log('Submitting post:', content, replyToPostId ? `as reply to ${replyToPostId}` : '');
+      console.log('Submitting post:', content, replyToPost ? `as reply to ${replyToPost.id}` : '');
 
       await createPost(content, {
-        inReplyToId: replyToPostId,
+        inReplyToId: replyToPost ? getReplyTarget(replyToPost).id : undefined,
         mediaIds,
       });
       console.log('Post submitted successfully');
 
       setComposeVisible(false);
-      setReplyToPostId(undefined);
-      setReplyToUsername(undefined);
+      setReplyToPost(undefined);
 
       // Refresh timeline
       loadTimeline();
@@ -140,8 +138,7 @@ export default function HomeScreen() {
     setPosts((currentPosts) => {
       const post = currentPosts.find(p => p.id === postId);
       if (post) {
-        setReplyToPostId(postId);
-        setReplyToUsername(post.account.username);
+        setReplyToPost(post);
         setComposeVisible(true);
       }
       return currentPosts;
@@ -388,12 +385,10 @@ export default function HomeScreen() {
         visible={composeVisible}
         onClose={() => {
           setComposeVisible(false);
-          setReplyToPostId(undefined);
-          setReplyToUsername(undefined);
+          setReplyToPost(undefined);
         }}
         onSubmit={handleSubmitPost}
-        replyToId={replyToPostId}
-        replyToUsername={replyToUsername}
+        replyToPost={replyToPost}
       />
 
       {/* Error Modal */}
