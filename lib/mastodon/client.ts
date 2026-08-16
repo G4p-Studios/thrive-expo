@@ -50,6 +50,83 @@ export async function authenticatedFetch<T>(
 }
 
 /**
+ * Query parameters pulled out of a `Link` header, ready to send back.
+ */
+export type PageCursor = Record<string, string>;
+
+export interface PaginatedResult<T> {
+  items: T;
+  /** Cursor for the next (older) page, or null at the end of the collection. */
+  next: PageCursor | null;
+  /** Cursor for the previous (newer) page. */
+  prev: PageCursor | null;
+}
+
+/**
+ * Parse a `Link` header into next/prev cursors.
+ *
+ * Some collections — blocks and mutes especially — paginate on internal ids
+ * that never appear in the response body, so the last item's `id` is the wrong
+ * cursor and the `Link` header is the only correct way to page through them.
+ */
+export function parseLinkHeader(header: string | null | undefined): {
+  next: PageCursor | null;
+  prev: PageCursor | null;
+} {
+  const result: { next: PageCursor | null; prev: PageCursor | null } = { next: null, prev: null };
+  if (!header) return result;
+
+  // Matching entries directly avoids splitting on commas that may appear inside a URL.
+  const entryPattern = /<([^>]+)>\s*;\s*rel\s*=\s*"?([^",;\s]+)"?/g;
+
+  for (const match of header.matchAll(entryPattern)) {
+    const [, url, rel] = match;
+    if (rel !== 'next' && rel !== 'prev') continue;
+
+    const queryStart = url.indexOf('?');
+    if (queryStart === -1) continue;
+
+    const params: PageCursor = {};
+    for (const pair of url.slice(queryStart + 1).split('&')) {
+      if (!pair) continue;
+      const eq = pair.indexOf('=');
+      const key = decodeURIComponent(eq === -1 ? pair : pair.slice(0, eq));
+      params[key] = eq === -1 ? '' : decodeURIComponent(pair.slice(eq + 1));
+    }
+
+    if (Object.keys(params).length > 0) result[rel] = params;
+  }
+
+  return result;
+}
+
+/**
+ * Authenticated GET that also returns the pagination cursors from `Link`.
+ */
+export async function getPaginated<T>(
+  endpoint: string,
+  params?: Record<string, string | undefined>
+): Promise<PaginatedResult<T>> {
+  const [instanceUrl, accessToken] = await Promise.all([
+    getInstanceUrl(),
+    getAccessToken(),
+  ]);
+
+  if (!instanceUrl || !accessToken) {
+    throw new NotAuthenticatedError();
+  }
+
+  const { data, headers } = await mastodonFetchRaw<T>(instanceUrl, endpoint, {
+    method: 'GET',
+    params,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const { next, prev } = parseLinkHeader(headers.get('link'));
+  return { items: data, next, prev };
+}
+
+/**
  * Make a request to a specific Mastodon instance
  * Used for OAuth and public endpoints
  */
@@ -58,6 +135,19 @@ export async function mastodonFetch<T>(
   endpoint: string,
   options: FetchOptions = {}
 ): Promise<T> {
+  const { data } = await mastodonFetchRaw<T>(instanceUrl, endpoint, options);
+  return data;
+}
+
+/**
+ * As `mastodonFetch`, but exposes the response headers for callers that need
+ * `Link` pagination.
+ */
+export async function mastodonFetchRaw<T>(
+  instanceUrl: string,
+  endpoint: string,
+  options: FetchOptions = {}
+): Promise<{ data: T; headers: Headers }> {
   const { body, params, ...fetchOptions } = options;
 
   // Build URL with query params
@@ -97,12 +187,12 @@ export async function mastodonFetch<T>(
 
   // Handle empty responses (204 No Content)
   if (response.status === 204) {
-    return {} as T;
+    return { data: {} as T, headers: response.headers };
   }
 
   const data = await response.json();
   console.log(`[Mastodon] ${endpoint} OK`);
-  return data;
+  return { data, headers: response.headers };
 }
 
 /**

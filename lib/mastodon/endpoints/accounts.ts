@@ -1,4 +1,4 @@
-import { get, post, patch } from '../client';
+import { get, post, patch, getPaginated, type PageCursor } from '../client';
 import { mapAccount, mapPost, mapRelationship } from '../mappers';
 import { getInstanceUrl, setAccountCache } from '../storage';
 import type { MastodonAccount, MastodonPost, MastodonRelationship } from '@/types/mastodon';
@@ -45,24 +45,24 @@ export async function getAccountStatuses(
   return { posts, nextMaxId };
 }
 
-interface FollowResult {
-  following: boolean;
+/**
+ * Follow an account.
+ *
+ * Returns the server's relationship rather than assuming success: following a
+ * `locked` account creates a *request*, which comes back as `requested: true`
+ * with `following` still false.
+ */
+export async function follow(accountId: string): Promise<MastodonRelationship> {
+  const raw = await post<any>(`/api/v1/accounts/${encodeURIComponent(accountId)}/follow`, {});
+  return mapRelationship(raw);
 }
 
 /**
- * Follow an account
+ * Unfollow an account. Also withdraws a pending follow request.
  */
-export async function follow(accountId: string): Promise<FollowResult> {
-  await post<any>(`/api/v1/accounts/${encodeURIComponent(accountId)}/follow`, {});
-  return { following: true };
-}
-
-/**
- * Unfollow an account
- */
-export async function unfollow(accountId: string): Promise<FollowResult> {
-  await post<any>(`/api/v1/accounts/${encodeURIComponent(accountId)}/unfollow`, {});
-  return { following: false };
+export async function unfollow(accountId: string): Promise<MastodonRelationship> {
+  const raw = await post<any>(`/api/v1/accounts/${encodeURIComponent(accountId)}/unfollow`, {});
+  return mapRelationship(raw);
 }
 
 interface BookmarksResponse {
@@ -212,6 +212,81 @@ export async function getRelationships(accountIds: string[]): Promise<MastodonRe
   });
   const raw = await get<any[]>('/api/v1/accounts/relationships', params);
   return raw.map(mapRelationship);
+}
+
+export interface CursorAccountsResponse {
+  accounts: MastodonAccount[];
+  /** Pass back to load the next page; null once the list is exhausted. */
+  next: PageCursor | null;
+}
+
+/**
+ * Fetch a collection of accounts that paginates on ids we never see.
+ *
+ * Blocks, mutes and follow requests are keyed server-side on the block/mute/
+ * request record, not on the account — so the last account's `id` is the wrong
+ * cursor and the `Link` header is the only correct way through the list.
+ */
+async function getAccountCollection(
+  endpoint: string,
+  cursor?: PageCursor | null
+): Promise<CursorAccountsResponse> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const { items, next } = await getPaginated<any[]>(endpoint, {
+    limit: '40',
+    ...(cursor ?? {}),
+  });
+
+  return {
+    accounts: (items || []).map(a => mapAccount(a, instanceUrl)),
+    next,
+  };
+}
+
+/**
+ * Accounts you have blocked.
+ */
+export async function getBlockedAccounts(cursor?: PageCursor | null): Promise<CursorAccountsResponse> {
+  return getAccountCollection('/api/v1/blocks', cursor);
+}
+
+/**
+ * Accounts you have muted.
+ */
+export async function getMutedAccounts(cursor?: PageCursor | null): Promise<CursorAccountsResponse> {
+  return getAccountCollection('/api/v1/mutes', cursor);
+}
+
+/**
+ * People waiting for you to approve their follow.
+ *
+ * Only ever non-empty for accounts with `locked` set, since an unlocked
+ * account approves followers automatically.
+ */
+export async function getFollowRequests(cursor?: PageCursor | null): Promise<CursorAccountsResponse> {
+  return getAccountCollection('/api/v1/follow_requests', cursor);
+}
+
+/**
+ * Approve a follow request. Keyed on the requesting account's id.
+ */
+export async function authorizeFollowRequest(accountId: string): Promise<MastodonRelationship> {
+  const raw = await post<any>(
+    `/api/v1/follow_requests/${encodeURIComponent(accountId)}/authorize`,
+    {}
+  );
+  return mapRelationship(raw);
+}
+
+/**
+ * Decline a follow request. The requester is not notified.
+ */
+export async function rejectFollowRequest(accountId: string): Promise<MastodonRelationship> {
+  const raw = await post<any>(
+    `/api/v1/follow_requests/${encodeURIComponent(accountId)}/reject`,
+    {}
+  );
+  return mapRelationship(raw);
 }
 
 interface FavouritesResponse {

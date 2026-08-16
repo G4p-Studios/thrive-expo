@@ -34,25 +34,9 @@ import {
   unreblog,
   bookmark,
   unbookmark,
+  stripHtml,
 } from '@/lib/mastodon';
 import type { MastodonAccount, MastodonPost, MastodonRelationship } from '@/types/mastodon';
-
-/**
- * Bios come back as HTML. Same treatment PostCard gives status content — the
- * app renders plain text rather than parsing markup.
- */
-function stripHtml(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .trim();
-}
 
 function formatCount(value?: number): string {
   const n = value ?? 0;
@@ -164,15 +148,19 @@ export default function AccountScreen() {
   const handleToggleFollow = useCallback(async () => {
     if (!account || busy) return;
 
-    const wasFollowing = !!relationship?.following;
+    // A pending request counts as "already asked", so the button withdraws it.
+    const wasFollowingOrRequested = !!relationship?.following || !!relationship?.requested;
     setBusy(true);
     try {
-      const result = wasFollowing ? await unfollow(account.id) : await follow(account.id);
-      setRelationship(prev =>
-        prev ? { ...prev, following: result.following } : prev
-      );
+      const updated = wasFollowingOrRequested
+        ? await unfollow(account.id)
+        : await follow(account.id);
+      // Taken wholesale from the server so `requested` is right for locked accounts.
+      setRelationship(updated);
     } catch (error: any) {
-      showError(error.message || (wasFollowing ? 'Could not unfollow' : 'Could not follow'));
+      showError(
+        error.message || (wasFollowingOrRequested ? 'Could not unfollow' : 'Could not follow')
+      );
     } finally {
       setBusy(false);
     }
@@ -311,7 +299,9 @@ export default function AccountScreen() {
             accessible={true}
             accessibilityLabel={`${account.displayName || account.username}, @${account.acct}${
               account.bot ? ', automated account' : ''
-            }${relationship?.followedBy ? ', follows you' : ''}`}
+            }${account.locked ? ', approves followers manually' : ''}${
+              relationship?.followedBy ? ', follows you' : ''
+            }`}
           >
             <Text style={[styles.displayName, { color: theme.text }]} accessible={false}>
               {account.displayName || account.username}
@@ -320,6 +310,25 @@ export default function AccountScreen() {
               @{account.acct}
             </Text>
             <View style={styles.badges} accessible={false}>
+              {/* `locked` means following needs the owner's approval, so say so
+                  before someone taps a button that only sends a request. */}
+              {account.locked && (
+                <View
+                  style={[styles.lockedBadge, { borderColor: theme.primary }]}
+                  accessible={false}
+                >
+                  <IconSymbol
+                    ios_icon_name="lock.fill"
+                    android_material_icon_name="lock"
+                    size={11}
+                    color={theme.primary}
+                    accessible={false}
+                  />
+                  <Text style={[styles.lockedBadgeText, { color: theme.primary }]} accessible={false}>
+                    Approves followers
+                  </Text>
+                </View>
+              )}
               {account.bot && (
                 <Text style={[styles.badge, { color: theme.textSecondary, borderColor: theme.border }]}>
                   Automated
@@ -332,6 +341,14 @@ export default function AccountScreen() {
               )}
             </View>
           </View>
+
+          {account.locked && !relationship?.following && !relationship?.blocking && (
+            <Text style={[styles.lockedNote, { color: theme.textSecondary }]}>
+              {relationship?.requested
+                ? 'Your request is waiting for them to approve it.'
+                : 'They approve followers by hand, so following sends a request.'}
+            </Text>
+          )}
 
           {!isSelf && (
             <View style={styles.actionRow}>
@@ -631,6 +648,17 @@ const styles = StyleSheet.create({
   identity: { marginTop: 10, gap: 2 },
   displayName: { fontSize: 21, fontWeight: '700' },
   acct: { fontSize: 15 },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  lockedBadgeText: { fontSize: 11, fontWeight: '700' },
+  lockedNote: { fontSize: 13, lineHeight: 18, marginTop: 10 },
   badges: { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
   badge: {
     fontSize: 11,

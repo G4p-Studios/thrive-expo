@@ -174,6 +174,112 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Account Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+            ACCOUNT
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={() => router.push('/follow-requests' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Follow requests"
+            accessibilityHint="Double tap to review people waiting to follow you"
+          >
+            <View style={styles.settingInfo}>
+              <IconSymbol
+                ios_icon_name="person.crop.circle.badge.questionmark"
+                android_material_icon_name="person-add"
+                size={24}
+                color={theme.primary}
+                style={{ marginRight: 16 }}
+              />
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>
+                  Follow requests
+                </Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Approve or decline people waiting to follow you
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={() => router.push('/muted' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Muted accounts"
+            accessibilityHint="Double tap to see and unmute accounts you have muted"
+          >
+            <View style={styles.settingInfo}>
+              <IconSymbol
+                ios_icon_name="speaker.slash.fill"
+                android_material_icon_name="volume-off"
+                size={24}
+                color={theme.primary}
+                style={{ marginRight: 16 }}
+              />
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>
+                  Muted accounts
+                </Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Accounts hidden from your timelines
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={() => router.push('/blocked' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Blocked accounts"
+            accessibilityHint="Double tap to see and unblock accounts you have blocked"
+          >
+            <View style={styles.settingInfo}>
+              <IconSymbol
+                ios_icon_name="hand.raised.fill"
+                android_material_icon_name="block"
+                size={24}
+                color={theme.primary}
+                style={{ marginRight: 16 }}
+              />
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>
+                  Blocked accounts
+                </Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Accounts that cannot follow you or see your posts
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
         {/* About Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>

@@ -30,7 +30,10 @@ export {
   authenticatedFetch,
   mastodonFetch,
   uploadFormData,
+  getPaginated,
+  parseLinkHeader,
 } from './client';
+export type { PageCursor, PaginatedResult } from './client';
 
 // Mentions
 export {
@@ -38,6 +41,9 @@ export {
   formatMentionPrefix,
   getReplyTarget,
 } from './mentions';
+
+// HTML
+export { stripHtml } from './html';
 
 // Status length
 export { countStatusCharacters, countableText } from './statusLength';
