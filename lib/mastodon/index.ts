@@ -67,3 +67,4 @@ export * from './endpoints/filters';
 export * from './endpoints/conversations';
 export * from './endpoints/discovery';
 export * from './endpoints/preferences';
+export * from './endpoints/push';

@@ -13,6 +13,7 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import "react-native-reanimated";
+import { useNotifications } from "@/lib/notifications/useNotifications";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,6 +21,9 @@ export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+
+  // Sets up notification handling, foreground polling and tap routing.
+  useNotifications();
 
   useEffect(() => {
     if (loaded) {

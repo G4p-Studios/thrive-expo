@@ -18,7 +18,6 @@ import { IconSymbol } from '@/components/IconSymbol';
 export default function SettingsScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoPlayMedia, setAutoPlayMedia] = useState(false);
   const [showSensitiveContent, setShowSensitiveContent] = useState(false);
   const [infoModalVisible, setInfoModalVisible] = useState(false);
@@ -27,12 +26,6 @@ export default function SettingsScreen() {
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
 
-  const handleNotificationsToggle = (value: boolean) => {
-    console.log('User toggled notifications:', value);
-    setNotificationsEnabled(value);
-    setInfoMessage(value ? 'Notifications enabled' : 'Notifications disabled');
-    setInfoModalVisible(true);
-  };
 
   const handleAutoPlayToggle = (value: boolean) => {
     console.log('User toggled auto-play media:', value);
@@ -83,7 +76,14 @@ export default function SettingsScreen() {
             PREFERENCES
           </Text>
 
-          <View style={[styles.settingItem, { borderBottomColor: theme.border }]}>
+          <TouchableOpacity
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={() => router.push('/notification-settings' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            accessibilityHint="Double tap to choose what you are notified about"
+          >
             <View style={styles.settingInfo}>
               <IconSymbol
                 ios_icon_name="bell.fill"
@@ -97,21 +97,17 @@ export default function SettingsScreen() {
                   Notifications
                 </Text>
                 <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
-                  Receive push notifications
+                  Choose what you are told about, and when
                 </Text>
               </View>
             </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={handleNotificationsToggle}
-              trackColor={{ false: theme.border, true: theme.primary }}
-              thumbColor="#fff"
-              accessible={true}
-              accessibilityRole="switch"
-              accessibilityLabel="Notifications toggle"
-              accessibilityHint={`Notifications are currently ${notificationsEnabled ? 'enabled' : 'disabled'}. Double tap to toggle`}
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={theme.textSecondary}
             />
-          </View>
+          </TouchableOpacity>
 
           <View style={[styles.settingItem, { borderBottomColor: theme.border }]}>
             <View style={styles.settingInfo}>

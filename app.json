@@ -52,6 +52,15 @@
         }
       ],
       "expo-video",
+      "expo-background-task",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/natively-dark.png",
+          "color": "#6364FF",
+          "sounds": []
+        }
+      ],
       [
         "expo-splash-screen",
         {
