@@ -4,6 +4,9 @@ import type {
   MastodonMediaAttachment,
   MastodonMention,
   MastodonPoll,
+  MastodonFilter,
+  MastodonFilterKeyword,
+  MastodonFilterResult,
   MastodonNotification,
   MastodonList,
   MastodonRelationship,
@@ -84,6 +87,43 @@ export function mapPoll(raw: any): MastodonPoll {
 }
 
 /**
+ * Map a keyword belonging to a filter
+ */
+export function mapFilterKeyword(raw: any): MastodonFilterKeyword {
+  return {
+    id: String(raw.id),
+    keyword: raw.keyword ?? '',
+    wholeWord: !!raw.whole_word,
+  };
+}
+
+/**
+ * Map a filter group
+ */
+export function mapFilter(raw: any): MastodonFilter {
+  return {
+    id: String(raw.id),
+    title: raw.title ?? '',
+    context: Array.isArray(raw.context) ? raw.context : [],
+    expiresAt: raw.expires_at ?? null,
+    // Older servers only know `warn`, which is also the documented default.
+    filterAction: raw.filter_action ?? 'warn',
+    keywords: (raw.keywords || []).map(mapFilterKeyword),
+  };
+}
+
+/**
+ * Map the filter match attached to a status
+ */
+export function mapFilterResult(raw: any): MastodonFilterResult {
+  return {
+    filter: mapFilter(raw.filter || {}),
+    keywordMatches: raw.keyword_matches || [],
+    statusMatches: raw.status_matches || [],
+  };
+}
+
+/**
  * Map Mastodon API status/post response to app type
  */
 export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
@@ -111,6 +151,7 @@ export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
     card: raw.card,
     poll: raw.poll ? mapPoll(raw.poll) : undefined,
     application: raw.application,
+    filtered: (raw.filtered || []).map(mapFilterResult),
     mentions: (raw.mentions || []).map(mapMention),
     tags: raw.tags,
     emojis: raw.emojis,

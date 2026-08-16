@@ -215,6 +215,39 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={() => router.push('/filters' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Filters"
+            accessibilityHint="Double tap to manage the words you do not want to see"
+          >
+            <View style={styles.settingInfo}>
+              <IconSymbol
+                ios_icon_name="line.3.horizontal.decrease.circle.fill"
+                android_material_icon_name="filter-alt"
+                size={24}
+                color={theme.primary}
+                style={{ marginRight: 16 }}
+              />
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>
+                  Filters
+                </Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Hide posts containing words you choose
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
             onPress={() => router.push('/muted' as any)}
             accessible={true}
             accessibilityRole="button"

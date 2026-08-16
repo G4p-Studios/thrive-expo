@@ -65,6 +65,8 @@ export interface MastodonPost {
   card?: any;
   poll?: MastodonPoll;
   application?: any;
+  /** Filters this post matched, if any. Empty or absent when nothing matched. */
+  filtered?: MastodonFilterResult[];
   mentions?: MastodonMention[];
   tags?: any[];
   emojis?: any[];
@@ -111,6 +113,43 @@ export interface MastodonPoll {
     title: string;
     votesCount: number | null;
   }>;
+}
+
+/** Where a filter applies. A filter must name at least one. */
+export type FilterContext = 'home' | 'notifications' | 'public' | 'thread' | 'account';
+
+/**
+ * What the client should do with a matching post.
+ * - `warn` — hide it behind the filter's title, revealable.
+ * - `hide` — do not show it at all.
+ * - `blur` — show the post but keep its media covered.
+ */
+export type FilterAction = 'warn' | 'hide' | 'blur';
+
+export interface MastodonFilterKeyword {
+  id: string;
+  keyword: string;
+  /** Match only on word boundaries, so "art" does not match "cart". */
+  wholeWord: boolean;
+}
+
+export interface MastodonFilter {
+  id: string;
+  title: string;
+  context: FilterContext[];
+  expiresAt: string | null;
+  filterAction: FilterAction;
+  keywords: MastodonFilterKeyword[];
+}
+
+/**
+ * Attached to a status the server matched against one of your filters.
+ * Matching happens server-side; the client only decides how to present it.
+ */
+export interface MastodonFilterResult {
+  filter: MastodonFilter;
+  keywordMatches: string[];
+  statusMatches: string[];
 }
 
 /** A server rule, used when reporting something as a rule violation. */

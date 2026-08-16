@@ -77,6 +77,13 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
 
   const displayContent = stripHtml(actualPost.content);
 
+  // Filters are matched server-side; `filtered` tells us what to do about it.
+  // A boost is judged on the boosted post, which is what actually matched.
+  const filterMatches = actualPost.filtered ?? [];
+  const hideFilter = filterMatches.find(m => m.filter.filterAction === 'hide');
+  const warnFilter = filterMatches.find(m => m.filter.filterAction === 'warn');
+  const blurFilter = filterMatches.find(m => m.filter.filterAction === 'blur');
+
   // A content warning hides the body and any media until the reader opts in.
   // `sensitive` on its own only covers the media, which is how Mastodon
   // itself treats the two flags.
@@ -85,8 +92,18 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
   const hasSensitiveMedia = !!actualPost.sensitive;
   const [revealed, setRevealed] = useState(false);
 
-  const bodyHidden = hasContentWarning && !revealed;
-  const mediaHidden = (hasContentWarning || hasSensitiveMedia) && !revealed;
+  // A warn filter behaves like a content warning, with the filter's name as the
+  // reason, so one reveal control covers both.
+  const bodyHidden = (hasContentWarning || !!warnFilter) && !revealed;
+  const mediaHidden =
+    (hasContentWarning || hasSensitiveMedia || !!warnFilter || !!blurFilter) && !revealed;
+
+  // The author's own warning wins over the filter's name when both apply.
+  const warningText = hasContentWarning
+    ? spoilerText
+    : warnFilter
+      ? `Filtered: ${warnFilter.filter.title}`
+      : '';
 
   const toggleReveal = useCallback(() => {
     const next = !revealed;
@@ -204,11 +221,15 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
 
     if (hasContentWarning) {
       parts.push(`Content warning: ${spoilerText}`);
+    } else if (warnFilter) {
+      parts.push(`Filtered by ${warnFilter.filter.title}`);
     }
 
-    // Never read out content the author asked to keep behind a warning.
+    // Never read out content the author — or a filter — asked to keep hidden.
     if (bodyHidden) {
-      parts.push('Post hidden behind a content warning');
+      parts.push(
+        hasContentWarning ? 'Post hidden behind a content warning' : 'Post hidden by your filter'
+      );
     } else {
       parts.push(displayContent);
     }
@@ -265,7 +286,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     if (states.length > 0) parts.push(`You have ${states.join(', ')} this post`);
 
     return parts.join('. ');
-  }, [isBoost, boosterDisplayName, displayName, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes, actualPost.account.acct]);
+  }, [isBoost, boosterDisplayName, displayName, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes, actualPost.account.acct, warnFilter]);
 
   // Accessibility actions with dynamic labels
   const accessibilityActions = useMemo(() => {
@@ -279,7 +300,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     }
     // The reveal control is a nested button, which the card's own
     // accessible={true} would otherwise swallow — expose it as an action.
-    if (hasContentWarning || hasSensitiveMedia) {
+    if (hasContentWarning || hasSensitiveMedia || warnFilter || blurFilter) {
       actions.push({ name: 'reveal', label: revealed ? 'Hide content' : 'Show content' });
     }
     // Poll options are nested touchables too, so each one gets an action.
@@ -301,7 +322,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     actions.push({ name: 'profile', label: `View @${actualPost.account.acct}'s profile` });
     actions.push({ name: 'share', label: 'Share' });
     return actions;
-  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed, poll, pollVotable, pollSelection, bodyHidden, actualPost.account.acct]);
+  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed, poll, pollVotable, pollSelection, bodyHidden, actualPost.account.acct, warnFilter, blurFilter]);
 
   const onAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
     const action = event.nativeEvent.actionName;
@@ -342,6 +363,10 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         break;
     }
   }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, toggleReveal, submitPollVote, handlePollOptionPress, handleAccountPress, pollSelection, reblogged, favourited, bookmarked]);
+
+  //  means exactly that: the server still sent the post (outside home
+  // and notifications it does not drop them), so the client removes it.
+  if (hideFilter) return null;
 
   return (
     <TouchableOpacity
@@ -423,15 +448,15 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         </Text>
       </View>
 
-      {/* Content warning */}
-      {hasContentWarning && (
+      {/* Content warning, or the filter that matched */}
+      {(hasContentWarning || warnFilter) && (
         <View
           style={[styles.cwContainer, { backgroundColor: theme.background, borderColor: theme.border }]}
           accessible={false}
           importantForAccessibility="no-hide-descendants"
         >
           <Text style={[styles.cwText, { color: theme.text }]} accessible={false}>
-            {spoilerText}
+            {warningText}
           </Text>
           <TouchableOpacity
             onPress={toggleReveal}
