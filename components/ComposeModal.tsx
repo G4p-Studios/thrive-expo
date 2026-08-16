@@ -76,6 +76,11 @@ interface ComposeModalProps {
   replyToPost?: MastodonPost;
   /** When set, the composer edits this post instead of creating a new one. */
   editingPost?: MastodonPost;
+  /**
+   * Audience for a brand new post. A reply always inherits the audience of the
+   * post it answers, so this only applies when there is nothing to inherit.
+   */
+  initialVisibility?: PostVisibility;
 }
 
 export default function ComposeModal({
@@ -84,6 +89,7 @@ export default function ComposeModal({
   onSubmit,
   replyToPost,
   editingPost,
+  initialVisibility,
 }: ComposeModalProps) {
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? colors.dark : colors.light;
@@ -205,7 +211,10 @@ export default function ComposeModal({
       }
 
       if (!replyToPost) {
-        if (!cancelled) setContent('');
+        if (!cancelled) {
+          setContent('');
+          if (initialVisibility) setVisibility(initialVisibility);
+        }
         return;
       }
 
@@ -237,7 +246,7 @@ export default function ComposeModal({
     return () => {
       cancelled = true;
     };
-  }, [visible, replyToPost, editingPost]);
+  }, [visible, replyToPost, editingPost, initialVisibility]);
 
   const resetComposer = () => {
     setContent('');

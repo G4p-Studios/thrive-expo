@@ -64,3 +64,4 @@ export * from './endpoints/polls';
 export * from './endpoints/reports';
 export * from './endpoints/domainBlocks';
 export * from './endpoints/filters';
+export * from './endpoints/conversations';

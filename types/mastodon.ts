@@ -115,6 +115,20 @@ export interface MastodonPoll {
   }>;
 }
 
+/**
+ * A direct-message thread.
+ *
+ * Mastodon has no separate messaging system — a conversation is simply a thread
+ * whose posts have `direct` visibility, grouped by participants.
+ */
+export interface MastodonConversation {
+  id: string;
+  unread: boolean;
+  /** Everyone in the thread except you. */
+  accounts: MastodonAccount[];
+  lastStatus?: MastodonPost;
+}
+
 /** Where a filter applies. A filter must name at least one. */
 export type FilterContext = 'home' | 'notifications' | 'public' | 'thread' | 'account';
 

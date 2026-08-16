@@ -7,6 +7,7 @@ import type {
   MastodonFilter,
   MastodonFilterKeyword,
   MastodonFilterResult,
+  MastodonConversation,
   MastodonNotification,
   MastodonList,
   MastodonRelationship,
@@ -155,6 +156,19 @@ export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
     mentions: (raw.mentions || []).map(mapMention),
     tags: raw.tags,
     emojis: raw.emojis,
+  };
+}
+
+/**
+ * Map a direct-message conversation
+ */
+export function mapConversation(raw: any, instanceUrl: string = ''): MastodonConversation {
+  return {
+    id: String(raw.id),
+    unread: !!raw.unread,
+    accounts: (raw.accounts || []).map((a: any) => mapAccount(a, instanceUrl)),
+    // Absent on a conversation whose only post has since been deleted.
+    lastStatus: raw.last_status ? mapPost(raw.last_status, instanceUrl) : undefined,
   };
 }
 

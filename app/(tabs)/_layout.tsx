@@ -27,6 +27,10 @@ function IOSTabLayout() {
         <NativeTabs.Trigger.Label>Notifications</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'bell', selected: 'bell.fill' }} md="notifications" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="(messages)">
+        <NativeTabs.Trigger.Label>Messages</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'envelope', selected: 'envelope.fill' }} md="mail" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(profile)">
         <NativeTabs.Trigger.Label>Me</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'person', selected: 'person.fill' }} md="person" />
@@ -57,7 +61,7 @@ function AndroidTabLayout() {
         name="(home)"
         options={{
           title: 'Home',
-          tabBarAccessibilityLabel: 'Home, 1 of 4',
+          tabBarAccessibilityLabel: 'Home, 1 of 5',
           tabBarIcon: ({ color, size }) => (
             <View accessible={false}>
               <IconSymbol
@@ -74,7 +78,7 @@ function AndroidTabLayout() {
         name="(explore)"
         options={{
           title: 'Explore',
-          tabBarAccessibilityLabel: 'Explore, 2 of 4',
+          tabBarAccessibilityLabel: 'Explore, 2 of 5',
           tabBarIcon: ({ color, size }) => (
             <View accessible={false}>
               <IconSymbol
@@ -91,7 +95,7 @@ function AndroidTabLayout() {
         name="(notifications)"
         options={{
           title: 'Notifications',
-          tabBarAccessibilityLabel: 'Notifications, 3 of 4',
+          tabBarAccessibilityLabel: 'Notifications, 3 of 5',
           tabBarIcon: ({ color, size }) => (
             <View accessible={false}>
               <IconSymbol
@@ -105,10 +109,27 @@ function AndroidTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="(messages)"
+        options={{
+          title: 'Messages',
+          tabBarAccessibilityLabel: 'Messages, 4 of 5',
+          tabBarIcon: ({ color, size }) => (
+            <View accessible={false}>
+              <IconSymbol
+                ios_icon_name="envelope.fill"
+                android_material_icon_name="mail"
+                size={size}
+                color={color}
+              />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="(profile)"
         options={{
           title: 'Me',
-          tabBarAccessibilityLabel: 'Me, 4 of 4',
+          tabBarAccessibilityLabel: 'Me, 5 of 5',
           tabBarIcon: ({ color, size }) => (
             <View accessible={false}>
               <IconSymbol
