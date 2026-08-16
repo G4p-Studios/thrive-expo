@@ -24,12 +24,20 @@ export async function getPostContext(postId: string): Promise<{ ancestors: Masto
   };
 }
 
+export type PostVisibility = 'public' | 'unlisted' | 'private' | 'direct';
+
 interface CreatePostOptions {
   inReplyToId?: string;
   mediaIds?: string[];
-  visibility?: 'public' | 'unlisted' | 'private' | 'direct';
+  visibility?: PostVisibility;
   sensitive?: boolean;
   spoilerText?: string;
+  /**
+   * Collapses duplicate submissions server-side. Reuse the same key when
+   * retrying a post that may already have gone through — without it, a retry
+   * after a dropped response posts twice.
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -61,7 +69,11 @@ export async function createPost(
     body.spoiler_text = options.spoilerText;
   }
 
-  const raw = await post<any>('/api/v1/statuses', body);
+  const headers = options.idempotencyKey
+    ? { 'Idempotency-Key': options.idempotencyKey }
+    : undefined;
+
+  const raw = await post<any>('/api/v1/statuses', body, headers);
   return mapPost(raw, instanceUrl);
 }
 
@@ -126,6 +138,29 @@ export async function deletePost(postId: string): Promise<void> {
   await del(`/api/v1/statuses/${encodeURIComponent(postId)}`);
 }
 
+export interface MastodonStatusSource {
+  id: string;
+  /** The original markup the author typed, not the rendered HTML. */
+  text: string;
+  spoilerText: string;
+}
+
+/**
+ * Get a post's editable source.
+ *
+ * The status entity only carries rendered HTML; loading that into an editor
+ * would show the author markup they never wrote and lose their original line
+ * breaks. This returns the text as they typed it.
+ */
+export async function getStatusSource(postId: string): Promise<MastodonStatusSource> {
+  const raw = await get<any>(`/api/v1/statuses/${encodeURIComponent(postId)}/source`);
+  return {
+    id: raw.id,
+    text: raw.text ?? '',
+    spoilerText: raw.spoiler_text ?? '',
+  };
+}
+
 interface EditPostOptions {
   mediaIds?: string[];
   sensitive?: boolean;
@@ -149,7 +184,8 @@ export async function editPost(
   if (options.sensitive !== undefined) {
     body.sensitive = options.sensitive;
   }
-  if (options.spoilerText) {
+  // Sent even when empty so clearing a content warning actually removes it.
+  if (options.spoilerText !== undefined) {
     body.spoiler_text = options.spoilerText;
   }
 

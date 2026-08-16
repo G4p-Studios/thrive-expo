@@ -63,7 +63,7 @@ export interface MastodonPost {
   visibility?: string;
   language?: string;
   card?: any;
-  poll?: any;
+  poll?: MastodonPoll;
   application?: any;
   mentions?: MastodonMention[];
   tags?: any[];

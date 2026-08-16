@@ -17,6 +17,8 @@ import ComposeModal, { ComposeSubmission } from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
 import {
   getReplyTarget,
+  getAccountCache,
+  editPost,
   getPost,
   getPostContext,
   createPost,
@@ -47,9 +49,20 @@ export default function PostDetailScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
+  const [editingPost, setEditingPost] = useState<MastodonPost | undefined>(undefined);
+  const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
+
+  // Needed to decide whether the main post is ours and therefore editable.
+  useEffect(() => {
+    getAccountCache()
+      .then(account => setCurrentAccountId(account?.id))
+      .catch(() => {
+        // Without it we simply don't offer editing.
+      });
+  }, []);
 
   const loadThread = useCallback(async () => {
     if (!id) return;
@@ -89,19 +102,38 @@ export default function PostDetailScreen() {
   const handleReply = useCallback((postId: string) => {
     const item = threadItems.find(i => i.post.id === postId);
     if (item) {
+      setEditingPost(undefined);
       setReplyToPost(item.post);
+      setComposeVisible(true);
+    }
+  }, [threadItems]);
+
+  const handleEdit = useCallback((postId: string) => {
+    const item = threadItems.find(i => i.post.id === postId);
+    if (item) {
+      setReplyToPost(undefined);
+      setEditingPost(item.post);
       setComposeVisible(true);
     }
   }, [threadItems]);
 
   const handleSubmitPost = async (content: string, submission: ComposeSubmission) => {
     try {
-      await createPost(content, {
-        inReplyToId: replyToPost ? getReplyTarget(replyToPost).id : undefined,
-        ...submission,
-      });
+      if (editingPost) {
+        await editPost(editingPost.id, content, {
+          mediaIds: submission.mediaIds,
+          sensitive: submission.sensitive,
+          spoilerText: submission.spoilerText,
+        });
+      } else {
+        await createPost(content, {
+          inReplyToId: replyToPost ? getReplyTarget(replyToPost).id : undefined,
+          ...submission,
+        });
+      }
       setComposeVisible(false);
       setReplyToPost(undefined);
+      setEditingPost(undefined);
       loadThread();
     } catch (error: any) {
       setErrorMessage(error.message || 'Failed to post');
@@ -176,18 +208,43 @@ export default function PostDetailScreen() {
     }
   }, [id, router]);
 
-  const renderItem = useCallback(({ item }: { item: ThreadItem }) => (
-    <View style={item.isMain ? [styles.mainPost, { borderLeftColor: theme.primary }] : undefined}>
-      <PostCard
-        post={item.post}
-        onReply={handleReply}
-        onReblog={handleReblog}
-        onFavourite={handleFavourite}
-        onBookmark={handleBookmark}
-        onPress={handlePostPress}
-      />
-    </View>
-  ), [handleReply, handleReblog, handleFavourite, handleBookmark, handlePostPress, theme.primary]);
+  const renderItem = useCallback(({ item }: { item: ThreadItem }) => {
+    // Only our own posts can be edited, and boosts are edited at the source.
+    const canEdit =
+      !!currentAccountId && !item.post.reblog && item.post.account.id === currentAccountId;
+
+    return (
+      <View style={item.isMain ? [styles.mainPost, { borderLeftColor: theme.primary }] : undefined}>
+        <PostCard
+          post={item.post}
+          onReply={handleReply}
+          onReblog={handleReblog}
+          onFavourite={handleFavourite}
+          onBookmark={handleBookmark}
+          onPress={handlePostPress}
+        />
+        {canEdit && (
+          <TouchableOpacity
+            style={[styles.editButton, { borderColor: theme.border }]}
+            onPress={() => handleEdit(item.post.id)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Edit post"
+            accessibilityHint="Double tap to change the text of your post"
+          >
+            <IconSymbol
+              ios_icon_name="pencil"
+              android_material_icon_name="edit"
+              size={16}
+              color={theme.textSecondary}
+              accessible={false}
+            />
+            <Text style={[styles.editButtonText, { color: theme.textSecondary }]}>Edit</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handlePostPress, handleEdit, currentAccountId, theme.primary, theme.border, theme.textSecondary]);
 
   if (loading) {
     return (
@@ -245,9 +302,11 @@ export default function PostDetailScreen() {
         onClose={() => {
           setComposeVisible(false);
           setReplyToPost(undefined);
+          setEditingPost(undefined);
         }}
         onSubmit={handleSubmitPost}
         replyToPost={replyToPost}
+        editingPost={editingPost}
       />
 
       {/* Error Modal */}
@@ -298,6 +357,23 @@ const styles = StyleSheet.create({
   },
   mainPost: {
     borderLeftWidth: 3,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginLeft: 16,
+    marginTop: -4,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderRadius: 14,
+  },
+  editButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,

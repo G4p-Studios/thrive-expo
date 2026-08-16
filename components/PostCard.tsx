@@ -10,10 +10,12 @@ import {
   ImageSourcePropType,
   Share,
   AccessibilityInfo,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
-import { MastodonPost } from '@/types/mastodon';
+import { voteOnPoll } from '@/lib/mastodon';
+import { MastodonPoll, MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import MediaPlayer from '@/components/MediaPlayer';
 
@@ -92,6 +94,62 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     AccessibilityInfo.announceForAccessibility(next ? 'Content shown' : 'Content hidden');
   }, [revealed]);
 
+  // Poll. `votedPoll` holds the server's response after voting; until then the
+  // poll from props is authoritative, which avoids syncing prop into state.
+  const [votedPoll, setVotedPoll] = useState<MastodonPoll | undefined>(undefined);
+  const [pollSelection, setPollSelection] = useState<number[]>([]);
+  const [pollSubmitting, setPollSubmitting] = useState(false);
+  const poll = votedPoll ?? actualPost.poll;
+
+  // Taken from the server rather than compared against the local clock: reading
+  // the clock during render is impure, and a poll that lapses while the screen
+  // is open fails the vote with a 422 we already surface.
+  const pollExpired = !!poll?.expired;
+  const pollShowsResults = !!poll && (poll.voted || pollExpired);
+  const pollVotable = !!poll && !pollShowsResults && !pollSubmitting;
+
+  const submitPollVote = useCallback(
+    async (choices: number[]) => {
+      if (!poll || choices.length === 0) return;
+
+      setPollSubmitting(true);
+      try {
+        const updated = await voteOnPoll(poll.id, choices);
+        setVotedPoll(updated);
+        setPollSelection([]);
+        AccessibilityInfo.announceForAccessibility('Vote submitted');
+      } catch (error: any) {
+        console.error('Failed to vote on poll:', error);
+        AccessibilityInfo.announceForAccessibility(
+          error?.message ? `Vote failed. ${error.message}` : 'Vote failed'
+        );
+      } finally {
+        setPollSubmitting(false);
+      }
+    },
+    [poll]
+  );
+
+  const handlePollOptionPress = useCallback(
+    (index: number) => {
+      if (!poll || !pollVotable) return;
+
+      // Single-choice polls commit straight away; multiple-choice ones collect
+      // selections until the reader confirms.
+      if (!poll.multiple) {
+        submitPollVote([index]);
+        return;
+      }
+
+      setPollSelection(prev =>
+        prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+      );
+    },
+    [poll, pollVotable, submitPollVote]
+  );
+
+  const pollTotalVotes = poll?.votersCount ?? poll?.votesCount ?? 0;
+
   const displayName = actualPost.account.displayName || actualPost.account.username;
   const username = actualPost.account.username;
   const boosterDisplayName = booster ? (booster.displayName || booster.username) : '';
@@ -165,6 +223,30 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
       }
     }
 
+    // Poll: read out the options, and the results once they're known.
+    if (poll && !bodyHidden) {
+      const optionText = poll.options.map((option, i) => {
+        if (!pollShowsResults) {
+          const selected = pollSelection.includes(i) ? ', selected' : '';
+          return `${option.title}${selected}`;
+        }
+        const share = pollTotalVotes > 0
+          ? Math.round(((option.votesCount ?? 0) / pollTotalVotes) * 100)
+          : 0;
+        const own = poll.ownVotes?.includes(i) ? ', your vote' : '';
+        return `${option.title}, ${share} percent${own}`;
+      });
+
+      parts.push(
+        `Poll${poll.multiple ? ', choose several' : ''}: ${optionText.join('. ')}`
+      );
+      parts.push(
+        pollExpired
+          ? `Poll closed, ${pollTotalVotes} ${pollTotalVotes === 1 ? 'vote' : 'votes'}`
+          : `${pollTotalVotes} ${pollTotalVotes === 1 ? 'vote' : 'votes'} so far`
+      );
+    }
+
     // Interaction counts
     const counts: string[] = [];
     if (repliesCount > 0) counts.push(`${repliesCount} ${repliesCount === 1 ? 'reply' : 'replies'}`);
@@ -180,7 +262,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     if (states.length > 0) parts.push(`You have ${states.join(', ')} this post`);
 
     return parts.join('. ');
-  }, [isBoost, boosterDisplayName, displayName, username, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden]);
+  }, [isBoost, boosterDisplayName, displayName, username, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes]);
 
   // Accessibility actions with dynamic labels
   const accessibilityActions = useMemo(() => {
@@ -197,12 +279,37 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     if (hasContentWarning || hasSensitiveMedia) {
       actions.push({ name: 'reveal', label: revealed ? 'Hide content' : 'Show content' });
     }
+    // Poll options are nested touchables too, so each one gets an action.
+    if (poll && pollVotable && !bodyHidden) {
+      poll.options.forEach((option, i) => {
+        actions.push({
+          name: `poll-${i}`,
+          label: poll.multiple
+            ? `${pollSelection.includes(i) ? 'Deselect' : 'Select'} ${option.title}`
+            : `Vote for ${option.title}`,
+        });
+      });
+      if (poll.multiple && pollSelection.length > 0) {
+        actions.push({ name: 'poll-submit', label: 'Submit vote' });
+      }
+    }
     actions.push({ name: 'share', label: 'Share' });
     return actions;
-  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed]);
+  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed, poll, pollVotable, pollSelection, bodyHidden]);
 
   const onAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
-    switch (event.nativeEvent.actionName) {
+    const action = event.nativeEvent.actionName;
+
+    if (action === 'poll-submit') {
+      submitPollVote(pollSelection);
+      return;
+    }
+    if (action.startsWith('poll-')) {
+      handlePollOptionPress(Number(action.slice('poll-'.length)));
+      return;
+    }
+
+    switch (action) {
       case 'reply':
         handleReply();
         break;
@@ -225,7 +332,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         handleShare();
         break;
     }
-  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, toggleReveal, reblogged, favourited, bookmarked]);
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, toggleReveal, submitPollVote, handlePollOptionPress, pollSelection, reblogged, favourited, bookmarked]);
 
   return (
     <TouchableOpacity
@@ -332,6 +439,94 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         >
           {displayContent}
         </Text>
+      )}
+
+      {/* Poll */}
+      {poll && !bodyHidden && (
+        <View style={styles.pollContainer} importantForAccessibility="no-hide-descendants">
+          {poll.options.map((option, index) => {
+            const votes = option.votesCount ?? 0;
+            const share = pollTotalVotes > 0 ? votes / pollTotalVotes : 0;
+            const isOwnVote = poll.ownVotes?.includes(index);
+            const isSelected = pollSelection.includes(index);
+
+            return (
+              <TouchableOpacity
+                key={`${poll.id}-${index}`}
+                style={[styles.pollOption, { borderColor: isSelected ? theme.primary : theme.border }]}
+                onPress={() => handlePollOptionPress(index)}
+                disabled={!pollVotable}
+                accessible={false}
+              >
+                {pollShowsResults && (
+                  <View
+                    style={[
+                      styles.pollBar,
+                      { width: `${Math.round(share * 100)}%`, backgroundColor: theme.primary, opacity: 0.18 },
+                    ]}
+                    accessible={false}
+                  />
+                )}
+                <View style={styles.pollOptionRow} accessible={false}>
+                  {!pollShowsResults && (
+                    <IconSymbol
+                      ios_icon_name={
+                        poll.multiple
+                          ? (isSelected ? 'checkmark.square.fill' : 'square')
+                          : (isSelected ? 'largecircle.fill.circle' : 'circle')
+                      }
+                      android_material_icon_name={
+                        poll.multiple
+                          ? (isSelected ? 'check-box' : 'check-box-outline-blank')
+                          : (isSelected ? 'radio-button-checked' : 'radio-button-unchecked')
+                      }
+                      size={20}
+                      color={isSelected ? theme.primary : theme.textSecondary}
+                      accessible={false}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.pollOptionText,
+                      { color: theme.text, fontWeight: isOwnVote ? '700' : '400' },
+                    ]}
+                    accessible={false}
+                  >
+                    {option.title}
+                  </Text>
+                  {pollShowsResults && (
+                    <Text style={[styles.pollPercent, { color: theme.textSecondary }]} accessible={false}>
+                      {Math.round(share * 100)}%
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+
+          {poll.multiple && pollVotable && (
+            <TouchableOpacity
+              style={[
+                styles.pollVoteButton,
+                { backgroundColor: theme.primary },
+                pollSelection.length === 0 && styles.pollVoteButtonDisabled,
+              ]}
+              onPress={() => submitPollVote(pollSelection)}
+              disabled={pollSelection.length === 0}
+              accessible={false}
+            >
+              <Text style={styles.pollVoteButtonText} accessible={false}>Vote</Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.pollFooter} accessible={false}>
+            {pollSubmitting && <ActivityIndicator size="small" color={theme.textSecondary} />}
+            <Text style={[styles.pollMeta, { color: theme.textSecondary }]} accessible={false}>
+              {pollTotalVotes} {pollTotalVotes === 1 ? 'vote' : 'votes'}
+              {pollExpired ? ' · Closed' : ''}
+            </Text>
+          </View>
+        </View>
       )}
 
       {/* Media attachments */}
@@ -491,6 +686,9 @@ export default memo(PostCard, (prevProps, nextProps) => {
     prevPost.content === nextPost.content &&
     prevPost.spoilerText === nextPost.spoilerText &&
     prevPost.sensitive === nextPost.sensitive &&
+    prevPost.poll?.id === nextPost.poll?.id &&
+    prevPost.poll?.voted === nextPost.poll?.voted &&
+    prevPost.poll?.votesCount === nextPost.poll?.votesCount &&
     prevPost.repliesCount === nextPost.repliesCount
   );
 });
@@ -538,6 +736,61 @@ const styles = StyleSheet.create({
   sensitiveCoverHint: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  pollContainer: {
+    marginTop: 10,
+    gap: 8,
+  },
+  pollOption: {
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    minHeight: 42,
+  },
+  pollBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+  },
+  pollOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  pollOptionText: {
+    flex: 1,
+    fontSize: 15,
+  },
+  pollPercent: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  pollVoteButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  pollVoteButtonDisabled: {
+    opacity: 0.5,
+  },
+  pollVoteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pollFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pollMeta: {
+    fontSize: 13,
   },
   container: {
     borderRadius: 12,

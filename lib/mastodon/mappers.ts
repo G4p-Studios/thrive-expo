@@ -3,6 +3,7 @@ import type {
   MastodonPost,
   MastodonMediaAttachment,
   MastodonMention,
+  MastodonPoll,
   MastodonNotification,
   MastodonList,
   MastodonRelationship,
@@ -62,6 +63,27 @@ export function mapMention(raw: any): MastodonMention {
 }
 
 /**
+ * Map a poll attached to a status
+ */
+export function mapPoll(raw: any): MastodonPoll {
+  return {
+    id: raw.id,
+    expiresAt: raw.expires_at ?? null,
+    expired: !!raw.expired,
+    multiple: !!raw.multiple,
+    votesCount: raw.votes_count ?? 0,
+    // Null when the instance hides voter counts on remote polls.
+    votersCount: raw.voters_count ?? null,
+    voted: !!raw.voted,
+    ownVotes: raw.own_votes || [],
+    options: (raw.options || []).map((option: any) => ({
+      title: option.title,
+      votesCount: option.votes_count ?? null,
+    })),
+  };
+}
+
+/**
  * Map Mastodon API status/post response to app type
  */
 export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
@@ -87,7 +109,7 @@ export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
     visibility: raw.visibility,
     language: raw.language,
     card: raw.card,
-    poll: raw.poll,
+    poll: raw.poll ? mapPoll(raw.poll) : undefined,
     application: raw.application,
     mentions: (raw.mentions || []).map(mapMention),
     tags: raw.tags,

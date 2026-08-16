@@ -30,7 +30,10 @@ import {
   getInstanceConfig,
   DEFAULT_INSTANCE_CONFIG,
   countStatusCharacters,
+  generateIdempotencyKey,
+  getStatusSource,
 } from '@/lib/mastodon';
+import type { PostVisibility } from '@/lib/mastodon';
 import {
   MastodonInstanceConfig,
   MastodonMediaAttachment,
@@ -41,9 +44,29 @@ import AudioRecorder from '@/components/AudioRecorder';
 /** Everything the composer collects alongside the post body. */
 export interface ComposeSubmission {
   mediaIds?: string[];
+  /**
+   * Always a string, never undefined, so an edit that clears a content warning
+   * actually removes it. `createPost` ignores an empty value.
+   */
   spoilerText?: string;
   sensitive?: boolean;
+  visibility?: PostVisibility;
+  /** Stable across retries of the same post; see `generateIdempotencyKey`. */
+  idempotencyKey?: string;
 }
+
+const VISIBILITY_OPTIONS: {
+  value: PostVisibility;
+  label: string;
+  hint: string;
+  ios: string;
+  android: 'public' | 'lock-open' | 'lock' | 'alternate-email';
+}[] = [
+  { value: 'public', label: 'Public', hint: 'Visible to anyone and listed in public timelines', ios: 'globe', android: 'public' },
+  { value: 'unlisted', label: 'Quiet public', hint: 'Visible to anyone but kept out of public timelines', ios: 'moon', android: 'lock-open' },
+  { value: 'private', label: 'Followers', hint: 'Visible only to your followers', ios: 'lock', android: 'lock' },
+  { value: 'direct', label: 'Mentioned only', hint: 'Visible only to the people you mention', ios: 'at', android: 'alternate-email' },
+];
 
 interface ComposeModalProps {
   visible: boolean;
@@ -51,9 +74,17 @@ interface ComposeModalProps {
   onSubmit: (content: string, submission: ComposeSubmission) => Promise<void>;
   /** The post being replied to, if any. Boosts are unwrapped automatically. */
   replyToPost?: MastodonPost;
+  /** When set, the composer edits this post instead of creating a new one. */
+  editingPost?: MastodonPost;
 }
 
-export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }: ComposeModalProps) {
+export default function ComposeModal({
+  visible,
+  onClose,
+  onSubmit,
+  replyToPost,
+  editingPost,
+}: ComposeModalProps) {
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? colors.dark : colors.light;
 
@@ -74,6 +105,43 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
   const [altDraft, setAltDraft] = useState('');
   const [savingAlt, setSavingAlt] = useState(false);
   const [altError, setAltError] = useState('');
+
+  // Audience
+  const [visibility, setVisibility] = useState<PostVisibility>('public');
+  const [visibilityPickerOpen, setVisibilityPickerOpen] = useState(false);
+
+  // Editing
+  const [loadingSource, setLoadingSource] = useState(false);
+  // Attachments that were already on the post being edited. Their descriptions
+  // can no longer be changed through the media endpoint.
+  const [originalMediaIds, setOriginalMediaIds] = useState<string[]>([]);
+
+  /**
+   * Held across retries so a re-tap after a dropped response doesn't post
+   * twice, and cleared once a post lands.
+   */
+  const idempotencyKeyRef = React.useRef<string | null>(null);
+
+  /**
+   * Drop the key whenever the post changes.
+   *
+   * Reusing a key after an edit would make the server return the *original*
+   * status and quietly throw the edit away, so only an unchanged retry should
+   * be deduplicated.
+   */
+  const invalidateIdempotencyKey = () => {
+    idempotencyKeyRef.current = null;
+  };
+
+  const handleContentChange = (text: string) => {
+    invalidateIdempotencyKey();
+    setContent(text);
+  };
+
+  const handleSpoilerChange = (text: string) => {
+    invalidateIdempotencyKey();
+    setSpoilerText(text);
+  };
 
   // Posting limits come from the server; these are only the starting point.
   const [instanceConfig, setInstanceConfig] = useState<MastodonInstanceConfig>(
@@ -111,9 +179,42 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
     let cancelled = false;
 
     (async () => {
+      // Editing: load the markup the author actually typed. The status entity
+      // only carries rendered HTML, which would put tags in the editor.
+      if (editingPost) {
+        setLoadingSource(true);
+        setMediaAttachments(editingPost.mediaAttachments || []);
+        setOriginalMediaIds((editingPost.mediaAttachments || []).map(m => m.id));
+        setMarkSensitive(!!editingPost.sensitive);
+
+        try {
+          const source = await getStatusSource(editingPost.id);
+          if (cancelled) return;
+
+          setContent(source.text);
+          if (source.spoilerText) {
+            setCwEnabled(true);
+            setSpoilerText(source.spoilerText);
+          }
+        } catch (error: any) {
+          if (!cancelled) setError(error.message || 'Could not load the post for editing');
+        } finally {
+          if (!cancelled) setLoadingSource(false);
+        }
+        return;
+      }
+
       if (!replyToPost) {
         if (!cancelled) setContent('');
         return;
+      }
+
+      const target = getReplyTarget(replyToPost);
+
+      // Replies default to the audience of the post they answer, so a private
+      // thread doesn't accidentally get a public reply.
+      if (target.visibility) {
+        setVisibility(target.visibility as PostVisibility);
       }
 
       // Our own handle is dropped from the prefill; read it from the cache the
@@ -126,7 +227,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
 
       // Carry the warning into the reply so answering a post doesn't strip the
       // context the original author put on it.
-      const inheritedWarning = getReplyTarget(replyToPost).spoilerText?.trim();
+      const inheritedWarning = target.spoilerText?.trim();
       if (inheritedWarning) {
         setCwEnabled(true);
         setSpoilerText(inheritedWarning);
@@ -136,7 +237,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
     return () => {
       cancelled = true;
     };
-  }, [visible, replyToPost]);
+  }, [visible, replyToPost, editingPost]);
 
   const resetComposer = () => {
     setContent('');
@@ -148,6 +249,10 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
     setAltTargetIndex(null);
     setAltDraft('');
     setAltError('');
+    setVisibility('public');
+    setVisibilityPickerOpen(false);
+    setOriginalMediaIds([]);
+    idempotencyKeyRef.current = null;
   };
 
   const handleSubmit = async () => {
@@ -162,6 +267,12 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
       return;
     }
 
+    // Generated once and reused, so re-tapping Post after a timeout resolves to
+    // the same status server-side instead of creating a second one.
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = generateIdempotencyKey();
+    }
+
     setLoading(true);
     setError('');
     try {
@@ -171,10 +282,14 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
 
       await onSubmit(content, {
         mediaIds,
-        spoilerText: trimmedSpoiler || undefined,
+        // Always a string: an edit that empties this must clear the warning.
+        spoilerText: trimmedSpoiler,
         // A content warning always implies sensitive, which is what the web UI
         // does; the toggle covers media that needs hiding without a warning.
         sensitive: !!trimmedSpoiler || (markSensitive && mediaAttachments.length > 0),
+        // Mastodon does not allow changing a post's audience after the fact.
+        visibility: editingPost ? undefined : visibility,
+        idempotencyKey: idempotencyKeyRef.current,
       });
 
       resetComposer();
@@ -192,8 +307,17 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
   };
 
   const openAltEditor = (index: number) => {
+    const attachment = mediaAttachments[index];
+
+    // The media endpoint only accepts descriptions while an attachment is
+    // unattached, so say so rather than letting the save fail.
+    if (attachment && originalMediaIds.includes(attachment.id)) {
+      setError('Descriptions cannot be changed once a post is published.');
+      return;
+    }
+
     setAltTargetIndex(index);
-    setAltDraft(mediaAttachments[index]?.description || '');
+    setAltDraft(attachment?.description || '');
     setAltError('');
   };
 
@@ -242,6 +366,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
       setUploadingMedia(true);
       setError('');
       const attachment = await uploadMedia(asset.uri, mimeType);
+      invalidateIdempotencyKey();
       setMediaAttachments(prev => [...prev, attachment]);
     } catch (error: any) {
       setError(error.message || 'Failed to upload media');
@@ -270,6 +395,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
       setUploadingMedia(true);
       setError('');
       const attachment = await uploadMedia(asset.uri, mimeType);
+      invalidateIdempotencyKey();
       setMediaAttachments(prev => [...prev, attachment]);
     } catch (error: any) {
       setError(error.message || 'Failed to upload audio');
@@ -289,6 +415,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
       setUploadingMedia(true);
       setError('');
       const attachment = await uploadMedia(uri, 'audio/m4a');
+      invalidateIdempotencyKey();
       setMediaAttachments(prev => [...prev, attachment]);
     } catch (error: any) {
       setError(error.message || 'Failed to upload recording');
@@ -298,6 +425,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
   };
 
   const removeAttachment = (index: number) => {
+    invalidateIdempotencyKey();
     setMediaAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
@@ -315,11 +443,21 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
   const missingAltText = mediaAttachments.filter(m => !m.description?.trim()).length;
 
   const canSubmit =
-    (content.trim() || mediaAttachments.length > 0) && !isOverLimit && !loading && !uploadingMedia;
+    (content.trim() || mediaAttachments.length > 0) &&
+    !isOverLimit &&
+    !loading &&
+    !uploadingMedia &&
+    !loadingSource;
 
-  const title = replyToPost
-    ? `Reply to @${getReplyTarget(replyToPost).account.acct}`
-    : 'New Post';
+  const title = editingPost
+    ? 'Edit post'
+    : replyToPost
+      ? `Reply to @${getReplyTarget(replyToPost).account.acct}`
+      : 'New Post';
+
+  const submitLabel = editingPost ? 'Save' : 'Post';
+  const activeVisibility =
+    VISIBILITY_OPTIONS.find(o => o.value === visibility) ?? VISIBILITY_OPTIONS[0];
 
   return (
     <Modal
@@ -361,14 +499,18 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
             ]}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel="Post"
-            accessibilityHint="Double tap to publish your post"
+            accessibilityLabel={submitLabel}
+            accessibilityHint={
+              editingPost
+                ? 'Double tap to save your changes'
+                : 'Double tap to publish your post'
+            }
             accessibilityState={{ disabled: !canSubmit }}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.postButtonText}>Post</Text>
+              <Text style={styles.postButtonText}>{submitLabel}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -379,6 +521,15 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
           contentContainerStyle={styles.contentInner}
           keyboardShouldPersistTaps="handled"
         >
+          {loadingSource && (
+            <View style={styles.sourceLoading}>
+              <ActivityIndicator size="small" color={theme.primary} />
+              <Text style={[styles.sourceLoadingText, { color: theme.textSecondary }]}>
+                Loading your post…
+              </Text>
+            </View>
+          )}
+
           {cwEnabled && (
             <TextInput
               style={[
@@ -388,7 +539,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
               placeholder="Content warning"
               placeholderTextColor={theme.textSecondary}
               value={spoilerText}
-              onChangeText={setSpoilerText}
+              onChangeText={handleSpoilerChange}
               autoFocus
               accessible={true}
               accessibilityLabel="Content warning"
@@ -402,7 +553,7 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
             placeholderTextColor={theme.textSecondary}
             multiline
             value={content}
-            onChangeText={setContent}
+            onChangeText={handleContentChange}
             autoFocus={!cwEnabled}
             accessible={true}
             accessibilityLabel="Post content"
@@ -592,6 +743,23 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
                 color={cwEnabled ? theme.primary : theme.textSecondary}
               />
             </TouchableOpacity>
+            {/* A published post's audience is fixed, so this is hidden when editing. */}
+            {!editingPost && (
+              <TouchableOpacity
+                onPress={() => setVisibilityPickerOpen(true)}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel={`Audience: ${activeVisibility.label}`}
+                accessibilityHint="Double tap to choose who can see this post"
+              >
+                <IconSymbol
+                  ios_icon_name={activeVisibility.ios}
+                  android_material_icon_name={activeVisibility.android}
+                  size={24}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+            )}
           </View>
           <Text
             style={[
@@ -615,6 +783,78 @@ export default function ComposeModal({ visible, onClose, onSubmit, replyToPost }
         onClose={() => setAudioRecorderVisible(false)}
         onRecordingComplete={handleAudioRecorded}
       />
+
+      {/* Audience picker */}
+      <Modal
+        visible={visibilityPickerOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setVisibilityPickerOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.pickerBackdrop}
+          activeOpacity={1}
+          onPress={() => setVisibilityPickerOpen(false)}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel="Close audience picker"
+        >
+          <View
+            style={[styles.pickerSheet, { backgroundColor: theme.background, borderColor: theme.border }]}
+          >
+            <Text style={[styles.pickerTitle, { color: theme.text }]}>Who can see this?</Text>
+            {VISIBILITY_OPTIONS.map(option => {
+              const selected = option.value === visibility;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={styles.pickerRow}
+                  onPress={() => {
+                    setVisibility(option.value);
+                    setVisibilityPickerOpen(false);
+                  }}
+                  accessible={true}
+                  accessibilityRole="radio"
+                  accessibilityLabel={option.label}
+                  accessibilityHint={option.hint}
+                  accessibilityState={{ selected }}
+                >
+                  <IconSymbol
+                    ios_icon_name={option.ios}
+                    android_material_icon_name={option.android}
+                    size={22}
+                    color={selected ? theme.primary : theme.textSecondary}
+                    accessible={false}
+                  />
+                  <View style={styles.pickerRowText}>
+                    <Text
+                      style={[styles.pickerLabel, { color: selected ? theme.primary : theme.text }]}
+                      accessible={false}
+                    >
+                      {option.label}
+                    </Text>
+                    <Text
+                      style={[styles.pickerHint, { color: theme.textSecondary }]}
+                      accessible={false}
+                    >
+                      {option.hint}
+                    </Text>
+                  </View>
+                  {selected && (
+                    <IconSymbol
+                      ios_icon_name="checkmark"
+                      android_material_icon_name="check"
+                      size={20}
+                      color={theme.primary}
+                      accessible={false}
+                    />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Alt text editor */}
       <Modal
@@ -814,6 +1054,52 @@ const styles = StyleSheet.create({
   },
   toggleLabel: {
     fontSize: 15,
+  },
+  sourceLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 12,
+  },
+  sourceLoadingText: {
+    fontSize: 14,
+  },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    borderTopWidth: 1,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 32,
+    gap: 4,
+  },
+  pickerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  pickerRowText: {
+    flex: 1,
+    gap: 2,
+  },
+  pickerLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  pickerHint: {
+    fontSize: 13,
+    lineHeight: 17,
   },
   audioThumbnail: {
     width: '100%',

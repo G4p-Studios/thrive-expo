@@ -120,9 +120,10 @@ export async function get<T>(
  */
 export async function post<T>(
   endpoint: string,
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
+  headers?: Record<string, string>
 ): Promise<T> {
-  return authenticatedFetch<T>(endpoint, { method: 'POST', body });
+  return authenticatedFetch<T>(endpoint, { method: 'POST', body, headers });
 }
 
 /**
