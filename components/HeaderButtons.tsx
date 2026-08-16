@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, StyleSheet } from "react-native";
 import { IconSymbol } from "@/components/IconSymbol";
-import { useTheme } from "@react-navigation/native";
+import { useTheme } from "expo-router";
 
 export function HeaderRightButton() {
   const theme = useTheme();

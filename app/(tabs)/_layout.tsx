@@ -1,7 +1,9 @@
 import React from 'react';
 import { Platform, View } from 'react-native';
-import { Tabs } from 'expo-router';
-import { useTheme } from '@react-navigation/native';
+// Since SDK 56 expo-router owns navigation and re-exports these itself.
+// Importing them from @react-navigation/native instead fails the production
+// bundle, even though it typechecks.
+import { Tabs, useTheme } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 
 // Conditionally import NativeTabs only on iOS (SDK 55 API)

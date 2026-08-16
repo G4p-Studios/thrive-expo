@@ -6,12 +6,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
-import { Stack } from "expo-router";
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
+// Theming comes from expo-router since SDK 56; @react-navigation/native is no
+// longer compatible and breaks the production bundle.
+import { Stack, DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
 import "react-native-reanimated";
 import { useNotifications } from "@/lib/notifications/useNotifications";
 
