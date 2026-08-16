@@ -523,7 +523,69 @@ export default function ExploreScreen() {
       )}
 
       {/* Content */}
-      {viewMode === 'search' && searchResults && searchType === 'accounts' ? (
+      {/* Discovery shortcuts, above the timeline rather than inside search */}
+      {viewMode !== 'search' && (
+        <View style={[styles.discoverRow, { borderBottomColor: theme.border }]}>
+          <TouchableOpacity
+            style={[styles.discoverChip, { borderColor: theme.border }]}
+            onPress={() => router.push('/trends' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Trending"
+            accessibilityHint="Double tap to see trending hashtags, posts and links"
+          >
+            <IconSymbol
+              ios_icon_name="chart.line.uptrend.xyaxis"
+              android_material_icon_name="trending-up"
+              size={16}
+              color={theme.primary}
+              accessible={false}
+            />
+            <Text style={[styles.discoverChipText, { color: theme.text }]}>Trending</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.discoverChip, { borderColor: theme.border }]}
+            onPress={() => router.push('/suggestions' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Who to follow"
+            accessibilityHint="Double tap to see accounts you might like"
+          >
+            <IconSymbol
+              ios_icon_name="person.2"
+              android_material_icon_name="people"
+              size={16}
+              color={theme.primary}
+              accessible={false}
+            />
+            <Text style={[styles.discoverChipText, { color: theme.text }]}>Who to follow</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {viewMode === 'search' && searchResults && searchType === 'hashtags' ? (
+        <FlatList
+          data={searchResults.hashtags}
+          keyExtractor={(item) => item.name}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.hashtagRow, { borderBottomColor: theme.border }]}
+              onPress={() => router.push(`/tag/${encodeURIComponent(item.name)}` as any)}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={`Hashtag ${item.name}`}
+              accessibilityHint="Double tap to see posts with this hashtag"
+            >
+              <Text style={[styles.hashtagName, { color: theme.text }]}>#{item.name}</Text>
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={[styles.emptyText, { color: theme.text }]}>No hashtags found</Text>
+            </View>
+          }
+        />
+      ) : viewMode === 'search' && searchResults && searchType === 'accounts' ? (
         <FlatList
           data={searchResults.accounts}
           keyExtractor={(item) => item.id || item.username}
@@ -692,6 +754,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  discoverRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  discoverChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  discoverChipText: { fontSize: 13, fontWeight: '600' },
+  hashtagRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  hashtagName: { fontSize: 17, fontWeight: '700' },
   accountIdentity: {
     flexDirection: 'row',
     alignItems: 'center',

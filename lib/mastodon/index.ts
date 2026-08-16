@@ -65,3 +65,4 @@ export * from './endpoints/reports';
 export * from './endpoints/domainBlocks';
 export * from './endpoints/filters';
 export * from './endpoints/conversations';
+export * from './endpoints/discovery';

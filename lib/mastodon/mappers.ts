@@ -8,6 +8,9 @@ import type {
   MastodonFilterKeyword,
   MastodonFilterResult,
   MastodonConversation,
+  MastodonTag,
+  MastodonPreviewCard,
+  MastodonSuggestion,
   MastodonNotification,
   MastodonList,
   MastodonRelationship,
@@ -125,6 +128,53 @@ export function mapFilterResult(raw: any): MastodonFilterResult {
 }
 
 /**
+ * Map a hashtag
+ */
+export function mapTag(raw: any): MastodonTag {
+  return {
+    name: raw.name ?? '',
+    url: raw.url ?? '',
+    history: (raw.history || []).map((h: any) => ({
+      day: String(h.day ?? ''),
+      uses: String(h.uses ?? '0'),
+      accounts: String(h.accounts ?? '0'),
+    })),
+    following: raw.following,
+    featured: raw.featured,
+  };
+}
+
+/**
+ * Map a link preview card — both the one attached to a post and the entity
+ * behind trending links.
+ */
+export function mapPreviewCard(raw: any): MastodonPreviewCard {
+  return {
+    url: raw.url ?? '',
+    title: raw.title ?? '',
+    description: raw.description ?? '',
+    type: raw.type ?? 'link',
+    authorName: raw.author_name || undefined,
+    providerName: raw.provider_name || undefined,
+    image: raw.image ?? null,
+    blurhash: raw.blurhash ?? null,
+    width: raw.width,
+    height: raw.height,
+  };
+}
+
+/**
+ * Map a follow suggestion
+ */
+export function mapSuggestion(raw: any, instanceUrl: string = ''): MastodonSuggestion {
+  return {
+    // v2 returns `sources` as an array on newer servers; either shape works here.
+    source: raw.source ?? (Array.isArray(raw.sources) ? raw.sources[0] : '') ?? '',
+    account: mapAccount(raw.account, instanceUrl),
+  };
+}
+
+/**
  * Map Mastodon API status/post response to app type
  */
 export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
@@ -149,7 +199,7 @@ export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
     spoilerText: raw.spoiler_text,
     visibility: raw.visibility,
     language: raw.language,
-    card: raw.card,
+    card: raw.card ? mapPreviewCard(raw.card) : undefined,
     poll: raw.poll ? mapPoll(raw.poll) : undefined,
     application: raw.application,
     filtered: (raw.filtered || []).map(mapFilterResult),
@@ -203,7 +253,7 @@ export function mapSearchResponse(raw: any, instanceUrl: string = ''): SearchRes
   return {
     accounts: (raw.accounts || []).map((a: any) => mapAccount(a, instanceUrl)),
     statuses: (raw.statuses || []).map((s: any) => mapPost(s, instanceUrl)),
-    hashtags: raw.hashtags || [],
+    hashtags: (raw.hashtags || []).map(mapTag),
   };
 }
 

@@ -62,7 +62,7 @@ export interface MastodonPost {
   spoilerText?: string;
   visibility?: string;
   language?: string;
-  card?: any;
+  card?: MastodonPreviewCard;
   poll?: MastodonPoll;
   application?: any;
   /** Filters this post matched, if any. Empty or absent when nothing matched. */
@@ -113,6 +113,44 @@ export interface MastodonPoll {
     title: string;
     votesCount: number | null;
   }>;
+}
+
+/** One day's usage of a hashtag. Counts arrive as strings. */
+export interface MastodonTagHistory {
+  day: string;
+  uses: string;
+  accounts: string;
+}
+
+export interface MastodonTag {
+  name: string;
+  url: string;
+  /** Most recent day first; empty on servers that don't compute trends. */
+  history: MastodonTagHistory[];
+  /** Whether you follow this tag. Absent for unauthenticated requests. */
+  following?: boolean;
+  featured?: boolean;
+}
+
+/** The link preview attached to a post, and the entity behind trending links. */
+export interface MastodonPreviewCard {
+  url: string;
+  title: string;
+  description: string;
+  /** `link`, `photo`, `video` or `rich`. */
+  type: string;
+  authorName?: string;
+  providerName?: string;
+  image?: string | null;
+  blurhash?: string | null;
+  width?: number;
+  height?: number;
+}
+
+export interface MastodonSuggestion {
+  /** Why it was suggested, e.g. `past_interactions` or `global`. */
+  source: string;
+  account: MastodonAccount;
 }
 
 /**
@@ -214,13 +252,5 @@ export interface MastodonEmoji {
 export interface SearchResponse {
   accounts: MastodonAccount[];
   statuses: MastodonPost[];
-  hashtags: Array<{
-    name: string;
-    url: string;
-    history: Array<{
-      day: string;
-      uses: string;
-      accounts: string;
-    }>;
-  }>;
+  hashtags: MastodonTag[];
 }
