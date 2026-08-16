@@ -17,6 +17,7 @@ export const DEFAULT_INSTANCE_CONFIG: MastodonInstanceConfig = {
   supportedMimeTypes: [],
   imageSizeLimit: 16777216,
   videoSizeLimit: 103809024,
+  rules: [],
 };
 
 function toPositiveInt(value: unknown, fallback: number): number {
@@ -43,6 +44,17 @@ export function mapInstanceConfig(raw: any): MastodonInstanceConfig {
     supportedMimeTypes: Array.isArray(media.supported_mime_types) ? media.supported_mime_types : [],
     imageSizeLimit: toPositiveInt(media.image_size_limit, d.imageSizeLimit),
     videoSizeLimit: toPositiveInt(media.video_size_limit, d.videoSizeLimit),
+    // `rules` sits at the top level of the Instance entity, not under
+    // `configuration`. Reporting a rule violation needs these.
+    rules: Array.isArray(raw?.rules)
+      ? raw.rules
+          .filter((rule: any) => rule && rule.id != null)
+          .map((rule: any) => ({
+            id: String(rule.id),
+            text: rule.text ?? '',
+            hint: rule.hint || undefined,
+          }))
+      : [],
   };
 }
 

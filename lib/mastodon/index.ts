@@ -55,3 +55,4 @@ export * from './endpoints/search';
 export * from './endpoints/media';
 export * from './endpoints/instance';
 export * from './endpoints/polls';
+export * from './endpoints/reports';

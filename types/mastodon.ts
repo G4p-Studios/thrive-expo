@@ -113,6 +113,25 @@ export interface MastodonPoll {
   }>;
 }
 
+/** A server rule, used when reporting something as a rule violation. */
+export interface MastodonInstanceRule {
+  id: string;
+  text: string;
+  /** Longer explanation; servers running older versions may omit it. */
+  hint?: string;
+}
+
+export type ReportCategory = 'spam' | 'legal' | 'violation' | 'other';
+
+export interface MastodonReport {
+  id: string;
+  category: ReportCategory;
+  comment: string;
+  forwarded: boolean;
+  statusIds: string[];
+  ruleIds: string[];
+}
+
 /**
  * The subset of `GET /api/v2/instance` → `configuration` that the client acts on.
  * Every instance can raise or lower these, so nothing here should be hardcoded.
@@ -128,6 +147,8 @@ export interface MastodonInstanceConfig {
   supportedMimeTypes: string[];
   imageSizeLimit: number;
   videoSizeLimit: number;
+  /** The server's rules, offered when reporting a violation. */
+  rules: MastodonInstanceRule[];
 }
 
 export interface MastodonEmoji {

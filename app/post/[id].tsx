@@ -15,6 +15,8 @@ import {
 import { colors } from '@/styles/commonStyles';
 import ComposeModal, { ComposeSubmission } from '@/components/ComposeModal';
 import PostCard from '@/components/PostCard';
+import ReportModal from '@/components/ReportModal';
+import ActionSheet from '@/components/ActionSheet';
 import {
   getReplyTarget,
   getAccountCache,
@@ -51,6 +53,8 @@ export default function PostDetailScreen() {
   const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
   const [editingPost, setEditingPost] = useState<MastodonPost | undefined>(undefined);
   const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
+  const [reportTarget, setReportTarget] = useState<MastodonPost | undefined>(undefined);
+  const [menuTargetId, setMenuTargetId] = useState<string | undefined>(undefined);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
@@ -114,6 +118,14 @@ export default function PostDetailScreen() {
       setReplyToPost(undefined);
       setEditingPost(item.post);
       setComposeVisible(true);
+    }
+  }, [threadItems]);
+
+  const handleReport = useCallback((postId: string) => {
+    const item = threadItems.find(i => i.post.id === postId);
+    if (item) {
+      // Boosts are reported against the original post and its author.
+      setReportTarget(getReplyTarget(item.post));
     }
   }, [threadItems]);
 
@@ -223,28 +235,65 @@ export default function PostDetailScreen() {
           onBookmark={handleBookmark}
           onPress={handlePostPress}
         />
-        {canEdit && (
-          <TouchableOpacity
-            style={[styles.editButton, { borderColor: theme.border }]}
-            onPress={() => handleEdit(item.post.id)}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Edit post"
-            accessibilityHint="Double tap to change the text of your post"
-          >
-            <IconSymbol
-              ios_icon_name="pencil"
-              android_material_icon_name="edit"
-              size={16}
-              color={theme.textSecondary}
-              accessible={false}
-            />
-            <Text style={[styles.editButtonText, { color: theme.textSecondary }]}>Edit</Text>
-          </TouchableOpacity>
+        {/* Secondary actions sit behind a menu so Report isn't a stray tap
+            away from reply and boost. */}
+        {currentAccountId && (
+          <View style={styles.ownerActions}>
+            <TouchableOpacity
+              style={[styles.smallButton, { borderColor: theme.border }]}
+              onPress={() => setMenuTargetId(item.post.id)}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="More actions"
+              accessibilityHint={
+                canEdit
+                  ? 'Double tap for options including editing this post'
+                  : 'Double tap for options including reporting this post'
+              }
+            >
+              <IconSymbol
+                ios_icon_name="ellipsis"
+                android_material_icon_name="more-horiz"
+                size={16}
+                color={theme.textSecondary}
+                accessible={false}
+              />
+              <Text style={[styles.smallButtonText, { color: theme.textSecondary }]}>More</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     );
-  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handlePostPress, handleEdit, currentAccountId, theme.primary, theme.border, theme.textSecondary]);
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handlePostPress, currentAccountId, theme.primary, theme.border, theme.textSecondary]);
+
+  const menuPost = threadItems.find(i => i.post.id === menuTargetId)?.post;
+  const menuIsOwn =
+    !!menuPost && !!currentAccountId && !menuPost.reblog && menuPost.account.id === currentAccountId;
+
+  const menuItems = menuPost
+    ? menuIsOwn
+      ? [
+          {
+            key: 'edit',
+            label: 'Edit post',
+            hint: 'Change the text or content warning',
+            ios: 'pencil',
+            android: 'edit',
+            onPress: () => handleEdit(menuPost.id),
+          },
+        ]
+      : [
+          {
+            key: 'report',
+            label: 'Report post',
+            hint: 'Send this post to the moderators for review',
+            ios: 'flag',
+            android: 'flag',
+            destructive: true,
+            onPress: () => handleReport(menuPost.id),
+          },
+        ]
+    : [];
 
   if (loading) {
     return (
@@ -309,6 +358,22 @@ export default function PostDetailScreen() {
         editingPost={editingPost}
       />
 
+      <ActionSheet
+        visible={!!menuTargetId}
+        onClose={() => setMenuTargetId(undefined)}
+        title={menuIsOwn ? 'Your post' : `Post by @${menuPost?.account.acct ?? ''}`}
+        items={menuItems}
+      />
+
+      {reportTarget && (
+        <ReportModal
+          visible={!!reportTarget}
+          onClose={() => setReportTarget(undefined)}
+          account={reportTarget.account}
+          post={reportTarget}
+        />
+      )}
+
       {/* Error Modal */}
       <Modal
         visible={errorModalVisible}
@@ -358,7 +423,12 @@ const styles = StyleSheet.create({
   mainPost: {
     borderLeftWidth: 3,
   },
-  editButton: {
+  ownerActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginLeft: 16,
+  },
+  smallButton: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
@@ -371,7 +441,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 14,
   },
-  editButtonText: {
+  smallButtonText: {
     fontSize: 13,
     fontWeight: '600',
   },

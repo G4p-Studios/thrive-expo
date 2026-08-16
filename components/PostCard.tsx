@@ -151,7 +151,6 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
   const pollTotalVotes = poll?.votersCount ?? poll?.votesCount ?? 0;
 
   const displayName = actualPost.account.displayName || actualPost.account.username;
-  const username = actualPost.account.username;
   const boosterDisplayName = booster ? (booster.displayName || booster.username) : '';
   
   // Format date
@@ -182,6 +181,10 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     }
   }, [onPress, post.id, router]);
 
+  const handleAccountPress = useCallback(() => {
+    router.push(`/account/${actualPost.account.id}` as any);
+  }, [router, actualPost.account.id]);
+
   const handleShare = useCallback(() => {
     const url = actualPost.url || actualPost.uri;
     if (url) {
@@ -197,7 +200,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
       parts.push(`${boosterDisplayName} boosted`);
     }
 
-    parts.push(`${displayName}, @${username}, ${timeAgo}`);
+    parts.push(`${displayName}, @${actualPost.account.acct}, ${timeAgo}`);
 
     if (hasContentWarning) {
       parts.push(`Content warning: ${spoilerText}`);
@@ -262,7 +265,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
     if (states.length > 0) parts.push(`You have ${states.join(', ')} this post`);
 
     return parts.join('. ');
-  }, [isBoost, boosterDisplayName, displayName, username, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes]);
+  }, [isBoost, boosterDisplayName, displayName, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes, actualPost.account.acct]);
 
   // Accessibility actions with dynamic labels
   const accessibilityActions = useMemo(() => {
@@ -293,9 +296,12 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         actions.push({ name: 'poll-submit', label: 'Submit vote' });
       }
     }
+    // Tapping the avatar opens the author's profile; that touchable sits inside
+    // the card's accessible node, so surface it as an action too.
+    actions.push({ name: 'profile', label: `View @${actualPost.account.acct}'s profile` });
     actions.push({ name: 'share', label: 'Share' });
     return actions;
-  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed, poll, pollVotable, pollSelection, bodyHidden]);
+  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed, poll, pollVotable, pollSelection, bodyHidden, actualPost.account.acct]);
 
   const onAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
     const action = event.nativeEvent.actionName;
@@ -328,11 +334,14 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
       case 'reveal':
         toggleReveal();
         break;
+      case 'profile':
+        handleAccountPress();
+        break;
       case 'share':
         handleShare();
         break;
     }
-  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, toggleReveal, submitPollVote, handlePollOptionPress, pollSelection, reblogged, favourited, bookmarked]);
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, toggleReveal, submitPollVote, handlePollOptionPress, handleAccountPress, pollSelection, reblogged, favourited, bookmarked]);
 
   return (
     <TouchableOpacity
@@ -375,30 +384,36 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress }:
         accessible={false}
         importantForAccessibility="no-hide-descendants"
       >
-        <Image
-          source={resolveImageSource(actualPost.account.avatar)}
-          style={styles.avatar}
+        <TouchableOpacity
+          style={styles.headerIdentity}
+          onPress={handleAccountPress}
           accessible={false}
-          importantForAccessibility="no"
-        />
-        <View style={styles.headerText}>
-          <Text
-            style={[styles.displayName, { color: theme.text }]}
-            numberOfLines={1}
+        >
+          <Image
+            source={resolveImageSource(actualPost.account.avatar)}
+            style={styles.avatar}
             accessible={false}
             importantForAccessibility="no"
-          >
-            {displayName}
-          </Text>
-          <Text
-            style={[styles.username, { color: theme.textSecondary }]}
-            numberOfLines={1}
-            accessible={false}
-            importantForAccessibility="no"
-          >
-            @{username}
-          </Text>
-        </View>
+          />
+          <View style={styles.headerText}>
+            <Text
+              style={[styles.displayName, { color: theme.text }]}
+              numberOfLines={1}
+              accessible={false}
+              importantForAccessibility="no"
+            >
+              {displayName}
+            </Text>
+            <Text
+              style={[styles.username, { color: theme.textSecondary }]}
+              numberOfLines={1}
+              accessible={false}
+              importantForAccessibility="no"
+            >
+              @{actualPost.account.acct}
+            </Text>
+          </View>
+        </TouchableOpacity>
         <Text
           style={[styles.timestamp, { color: theme.textSecondary }]}
           accessible={false}
@@ -808,6 +823,12 @@ const styles = StyleSheet.create({
   boostText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  headerIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 0,
   },
   header: {
     flexDirection: 'row',

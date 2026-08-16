@@ -1,5 +1,5 @@
 
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -46,6 +46,7 @@ type ViewMode = 'public' | 'local' | 'search';
 
 export default function ExploreScreen() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
   const [posts, setPosts] = useState<MastodonPost[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -312,28 +313,47 @@ export default function ExploreScreen() {
   const renderAccount = ({ item }: { item: MastodonAccount }) => (
     <View
       style={[styles.accountCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-      accessible={true}
-      accessibilityRole="summary"
-      accessibilityLabel={`${item.displayName || item.username}, @${item.username}`}
     >
-      <Image
-        source={resolveImageSource(item.avatar)}
-        style={styles.accountAvatar}
-        accessibilityLabel={`${item.displayName || item.username}'s avatar`}
-      />
-      <View style={styles.accountInfo}>
-        <Text style={[styles.accountDisplayName, { color: theme.text }]} numberOfLines={1}>
-          {item.displayName || item.username}
-        </Text>
-        <Text style={[styles.accountUsername, { color: theme.textSecondary }]} numberOfLines={1}>
-          @{item.username}
-        </Text>
-        {item.note && (
-          <Text style={[styles.accountNote, { color: theme.textSecondary }]} numberOfLines={2}>
-            {item.note.replace(/<[^>]*>/g, '')}
+      <TouchableOpacity
+        style={styles.accountIdentity}
+        onPress={() => router.push(`/account/${item.id}` as any)}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.displayName || item.username}, @${item.acct}`}
+        accessibilityHint="Double tap to open this profile"
+      >
+        <Image
+          source={resolveImageSource(item.avatar)}
+          style={styles.accountAvatar}
+          accessible={false}
+          importantForAccessibility="no"
+        />
+        <View style={styles.accountInfo}>
+          <Text
+            style={[styles.accountDisplayName, { color: theme.text }]}
+            numberOfLines={1}
+            accessible={false}
+          >
+            {item.displayName || item.username}
           </Text>
-        )}
-      </View>
+          <Text
+            style={[styles.accountUsername, { color: theme.textSecondary }]}
+            numberOfLines={1}
+            accessible={false}
+          >
+            @{item.acct}
+          </Text>
+          {item.note ? (
+            <Text
+              style={[styles.accountNote, { color: theme.textSecondary }]}
+              numberOfLines={2}
+              accessible={false}
+            >
+              {item.note.replace(/<[^>]*>/g, '')}
+            </Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
       <TouchableOpacity
         style={[
           styles.followButton,
@@ -671,6 +691,11 @@ const styles = StyleSheet.create({
   searchTypeText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  accountIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   accountCard: {
     flexDirection: 'row',
