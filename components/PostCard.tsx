@@ -15,12 +15,13 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
-import { voteOnPoll } from '@/lib/mastodon';
+import { voteOnPoll, postMentionsCurrentUser } from '@/lib/mastodon';
 import { MastodonPoll, MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import MediaPlayer from '@/components/MediaPlayer';
 import EmojiText, { stripEmojiColons } from '@/components/EmojiText';
 import { playInAppSound } from '@/lib/notifications';
+import { AccessibilityFocusView } from '@/modules/accessibility-focus';
 
 // Helper to resolve image sources
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -179,6 +180,31 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
   );
 
   const pollTotalVotes = poll?.votersCount ?? poll?.votesCount ?? 0;
+
+  /**
+   * Earcon played the moment screen reader focus lands on this post, so its
+   * kind is known before the label has been read out.
+   *
+   * Only one sound fires: hearing three tones stacked on a post that mentions
+   * you and has a photo would be worse than hearing none. A mention is the most
+   * urgent thing to know about, so it wins.
+   */
+  const handleAccessibilityFocus = useCallback(() => {
+    // Read inside the handler, never during render: the cached account is
+    // mutable module state.
+    if (postMentionsCurrentUser(post)) {
+      playInAppSound('mention');
+      return;
+    }
+
+    const media = actualPost.mediaAttachments ?? [];
+    if (media.length === 0) return;
+
+    const hasNonImage = media.some(
+      m => m.type === 'video' || m.type === 'gifv' || m.type === 'audio'
+    );
+    playInAppSound(hasNonImage ? 'media' : 'image');
+  }, [post, actualPost.mediaAttachments]);
 
   const displayName = actualPost.account.displayName || actualPost.account.username;
   const boosterDisplayName = booster ? (booster.displayName || booster.username) : '';
@@ -405,398 +431,403 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
   if (hideFilter) return null;
 
   return (
-    <TouchableOpacity
-      onPress={handlePress}
-      activeOpacity={0.7}
-      style={[styles.container, { backgroundColor: theme.card, borderColor: theme.border }]}
-      accessible={true}
-      accessibilityRole="button"
-      importantForAccessibility="yes"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityActions={accessibilityActions}
-      onAccessibilityAction={onAccessibilityAction}
-    >
-      {/* Boost Indicator */}
-      {isBoost && (
-        <View
-          style={styles.boostIndicator}
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-        >
-          <IconSymbol
-            ios_icon_name="arrow.2.squarepath"
-            android_material_icon_name="repeat"
-            size={16}
-            color={theme.success}
-            accessible={false}
-          />
-          <Text
-            style={[styles.boostText, { color: theme.success }]}
-            accessible={false}
-          >
-            {boosterDisplayName} boosted
-          </Text>
-        </View>
-      )}
-
-      {/* Header */}
-      <View
-        style={styles.header}
-        accessible={false}
-        importantForAccessibility="no-hide-descendants"
+    // A transparent native wrapper that reports screen reader focus. React
+    // Native has no such event, and it must sit outside the card rather than
+    // inside, since the card itself is the element that takes focus.
+    <AccessibilityFocusView onAccessibilityFocus={handleAccessibilityFocus}>
+      <TouchableOpacity
+        onPress={handlePress}
+        activeOpacity={0.7}
+        style={[styles.container, { backgroundColor: theme.card, borderColor: theme.border }]}
+        accessible={true}
+        accessibilityRole="button"
+        importantForAccessibility="yes"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityActions={accessibilityActions}
+        onAccessibilityAction={onAccessibilityAction}
       >
-        <TouchableOpacity
-          style={styles.headerIdentity}
-          onPress={handleAccountPress}
-          accessible={false}
-        >
-          <Image
-            source={resolveImageSource(actualPost.account.avatar)}
-            style={styles.avatar}
-            accessible={false}
-            importantForAccessibility="no"
-          />
-          <View style={styles.headerText}>
-            <Text
-              style={[styles.displayName, { color: theme.text }]}
-              numberOfLines={1}
-              accessible={false}
-              importantForAccessibility="no"
-            >
-              {displayName}
-            </Text>
-            <Text
-              style={[styles.username, { color: theme.textSecondary }]}
-              numberOfLines={1}
-              accessible={false}
-              importantForAccessibility="no"
-            >
-              @{actualPost.account.acct}
-            </Text>
-          </View>
-        </TouchableOpacity>
-        <Text
-          style={[styles.timestamp, { color: theme.textSecondary }]}
-          accessible={false}
-          importantForAccessibility="no"
-        >
-          {timeAgo}
-        </Text>
-      </View>
-
-      {/* Content warning, or the filter that matched */}
-      {(hasContentWarning || warnFilter) && (
-        <View
-          style={[styles.cwContainer, { backgroundColor: theme.background, borderColor: theme.border }]}
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-        >
-          <Text style={[styles.cwText, { color: theme.text }]} accessible={false}>
-            {warningText}
-          </Text>
-          <TouchableOpacity
-            onPress={toggleReveal}
-            style={[styles.cwButton, { borderColor: theme.border }]}
-            accessible={false}
-          >
-            <Text style={[styles.cwButtonText, { color: theme.primary }]} accessible={false}>
-              {revealed ? 'Hide' : 'Show more'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Content */}
-      {!bodyHidden && (
-        <View accessible={false} importantForAccessibility="no-hide-descendants">
-          <EmojiText
-            text={displayContent}
-            emojis={actualPost.emojis}
-            style={[styles.content, { color: theme.text }]}
-            size={16}
-          />
-          {translation ? (
-            <Text style={[styles.translationNote, { color: theme.textSecondary }]} accessible={false}>
-              {translation.detectedSourceLanguage
-                ? `Translated from ${translation.detectedSourceLanguage.toUpperCase()}`
-                : 'Translated'}
-              {translation.provider ? ` by ${translation.provider}` : ''}
-            </Text>
-          ) : null}
-        </View>
-      )}
-
-      {/* Link preview */}
-      {!bodyHidden && card && card.url ? (
-        <TouchableOpacity
-          style={[styles.card, { borderColor: theme.border, backgroundColor: theme.background }]}
-          onPress={handleCardPress}
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-        >
-          {card.image ? (
-            <Image
-              source={{ uri: card.image }}
-              style={[styles.cardImage, { backgroundColor: theme.card }]}
-              accessible={false}
-            />
-          ) : null}
-          <View style={styles.cardText} accessible={false}>
-            {card.providerName ? (
-              <Text
-                style={[styles.cardProvider, { color: theme.textSecondary }]}
-                numberOfLines={1}
-                accessible={false}
-              >
-                {card.providerName}
-              </Text>
-            ) : null}
-            <Text
-              style={[styles.cardTitle, { color: theme.text }]}
-              numberOfLines={2}
-              accessible={false}
-            >
-              {card.title || card.url}
-            </Text>
-            {card.description ? (
-              <Text
-                style={[styles.cardDescription, { color: theme.textSecondary }]}
-                numberOfLines={2}
-                accessible={false}
-              >
-                {card.description}
-              </Text>
-            ) : null}
-          </View>
-        </TouchableOpacity>
-      ) : null}
-
-      {/* Poll */}
-      {poll && !bodyHidden && (
-        <View style={styles.pollContainer} importantForAccessibility="no-hide-descendants">
-          {poll.options.map((option, index) => {
-            const votes = option.votesCount ?? 0;
-            const share = pollTotalVotes > 0 ? votes / pollTotalVotes : 0;
-            const isOwnVote = poll.ownVotes?.includes(index);
-            const isSelected = pollSelection.includes(index);
-
-            return (
-              <TouchableOpacity
-                key={`${poll.id}-${index}`}
-                style={[styles.pollOption, { borderColor: isSelected ? theme.primary : theme.border }]}
-                onPress={() => handlePollOptionPress(index)}
-                disabled={!pollVotable}
-                accessible={false}
-              >
-                {pollShowsResults && (
-                  <View
-                    style={[
-                      styles.pollBar,
-                      { width: `${Math.round(share * 100)}%`, backgroundColor: theme.primary, opacity: 0.18 },
-                    ]}
-                    accessible={false}
-                  />
-                )}
-                <View style={styles.pollOptionRow} accessible={false}>
-                  {!pollShowsResults && (
-                    <IconSymbol
-                      ios_icon_name={
-                        poll.multiple
-                          ? (isSelected ? 'checkmark.square.fill' : 'square')
-                          : (isSelected ? 'largecircle.fill.circle' : 'circle')
-                      }
-                      android_material_icon_name={
-                        poll.multiple
-                          ? (isSelected ? 'check-box' : 'check-box-outline-blank')
-                          : (isSelected ? 'radio-button-checked' : 'radio-button-unchecked')
-                      }
-                      size={20}
-                      color={isSelected ? theme.primary : theme.textSecondary}
-                      accessible={false}
-                    />
-                  )}
-                  <Text
-                    style={[
-                      styles.pollOptionText,
-                      { color: theme.text, fontWeight: isOwnVote ? '700' : '400' },
-                    ]}
-                    accessible={false}
-                  >
-                    {option.title}
-                  </Text>
-                  {pollShowsResults && (
-                    <Text style={[styles.pollPercent, { color: theme.textSecondary }]} accessible={false}>
-                      {Math.round(share * 100)}%
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-
-          {poll.multiple && pollVotable && (
-            <TouchableOpacity
-              style={[
-                styles.pollVoteButton,
-                { backgroundColor: theme.primary },
-                pollSelection.length === 0 && styles.pollVoteButtonDisabled,
-              ]}
-              onPress={() => submitPollVote(pollSelection)}
-              disabled={pollSelection.length === 0}
-              accessible={false}
-            >
-              <Text style={styles.pollVoteButtonText} accessible={false}>Vote</Text>
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.pollFooter} accessible={false}>
-            {pollSubmitting && <ActivityIndicator size="small" color={theme.textSecondary} />}
-            <Text style={[styles.pollMeta, { color: theme.textSecondary }]} accessible={false}>
-              {pollTotalVotes} {pollTotalVotes === 1 ? 'vote' : 'votes'}
-              {pollExpired ? ' · Closed' : ''}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Media attachments */}
-      {actualPost.mediaAttachments && actualPost.mediaAttachments.length > 0 && (
-        mediaHidden ? (
-          <TouchableOpacity
-            style={[styles.sensitiveCover, { backgroundColor: theme.card, borderColor: theme.border }]}
-            onPress={toggleReveal}
+        {/* Boost Indicator */}
+        {isBoost && (
+          <View
+            style={styles.boostIndicator}
             accessible={false}
             importantForAccessibility="no-hide-descendants"
           >
             <IconSymbol
-              ios_icon_name="eye.slash"
-              android_material_icon_name="visibility-off"
-              size={26}
-              color={theme.textSecondary}
+              ios_icon_name="arrow.2.squarepath"
+              android_material_icon_name="repeat"
+              size={16}
+              color={theme.success}
               accessible={false}
             />
-            <Text style={[styles.sensitiveCoverText, { color: theme.textSecondary }]} accessible={false}>
-              {hasContentWarning ? 'Media hidden' : 'Sensitive content'}
+            <Text
+              style={[styles.boostText, { color: theme.success }]}
+              accessible={false}
+            >
+              {boosterDisplayName} boosted
             </Text>
-            <Text style={[styles.sensitiveCoverHint, { color: theme.primary }]} accessible={false}>
-              Tap to show
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.mediaContainer} importantForAccessibility="no-hide-descendants">
-            {actualPost.mediaAttachments.slice(0, 4).map((media, index) => (
-              media.type === 'video' || media.type === 'gifv' || media.type === 'audio' ? (
-                <MediaPlayer key={media.id || index} attachment={media} />
-              ) : (
-                <Image
-                  key={media.id || index}
-                  source={resolveImageSource(media.url)}
-                  style={styles.mediaImage}
-                  accessible={false}
-                />
-              )
-            ))}
           </View>
-        )
-      )}
+        )}
 
-      {/* Actions - hidden from accessibility tree, visual only */}
-      <View
-        style={styles.actions}
-        accessible={false}
-        importantForAccessibility="no-hide-descendants"
-      >
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={handleReply}
+        {/* Header */}
+        <View
+          style={styles.header}
           accessible={false}
+          importantForAccessibility="no-hide-descendants"
         >
-          <IconSymbol
-            ios_icon_name="bubble.left"
-            android_material_icon_name="chat"
-            size={20}
-            color={theme.textSecondary}
-            accessible={false}
-          />
-          <Text
-            style={[styles.actionCount, { color: theme.textSecondary }]}
+          <TouchableOpacity
+            style={styles.headerIdentity}
+            onPress={handleAccountPress}
             accessible={false}
           >
-            {repliesCount}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={handleReblog}
-          accessible={false}
-        >
-          <IconSymbol
-            ios_icon_name="arrow.2.squarepath"
-            android_material_icon_name="repeat"
-            size={20}
-            color={reblogged ? theme.success : theme.textSecondary}
-            accessible={false}
-          />
+            <Image
+              source={resolveImageSource(actualPost.account.avatar)}
+              style={styles.avatar}
+              accessible={false}
+              importantForAccessibility="no"
+            />
+            <View style={styles.headerText}>
+              <Text
+                style={[styles.displayName, { color: theme.text }]}
+                numberOfLines={1}
+                accessible={false}
+                importantForAccessibility="no"
+              >
+                {displayName}
+              </Text>
+              <Text
+                style={[styles.username, { color: theme.textSecondary }]}
+                numberOfLines={1}
+                accessible={false}
+                importantForAccessibility="no"
+              >
+                @{actualPost.account.acct}
+              </Text>
+            </View>
+          </TouchableOpacity>
           <Text
-            style={[styles.actionCount, { color: reblogged ? theme.success : theme.textSecondary }]}
+            style={[styles.timestamp, { color: theme.textSecondary }]}
             accessible={false}
+            importantForAccessibility="no"
           >
-            {reblogsCount}
+            {timeAgo}
           </Text>
-        </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={handleFavourite}
+        {/* Content warning, or the filter that matched */}
+        {(hasContentWarning || warnFilter) && (
+          <View
+            style={[styles.cwContainer, { backgroundColor: theme.background, borderColor: theme.border }]}
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Text style={[styles.cwText, { color: theme.text }]} accessible={false}>
+              {warningText}
+            </Text>
+            <TouchableOpacity
+              onPress={toggleReveal}
+              style={[styles.cwButton, { borderColor: theme.border }]}
+              accessible={false}
+            >
+              <Text style={[styles.cwButtonText, { color: theme.primary }]} accessible={false}>
+                {revealed ? 'Hide' : 'Show more'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Content */}
+        {!bodyHidden && (
+          <View accessible={false} importantForAccessibility="no-hide-descendants">
+            <EmojiText
+              text={displayContent}
+              emojis={actualPost.emojis}
+              style={[styles.content, { color: theme.text }]}
+              size={16}
+            />
+            {translation ? (
+              <Text style={[styles.translationNote, { color: theme.textSecondary }]} accessible={false}>
+                {translation.detectedSourceLanguage
+                  ? `Translated from ${translation.detectedSourceLanguage.toUpperCase()}`
+                  : 'Translated'}
+                {translation.provider ? ` by ${translation.provider}` : ''}
+              </Text>
+            ) : null}
+          </View>
+        )}
+
+        {/* Link preview */}
+        {!bodyHidden && card && card.url ? (
+          <TouchableOpacity
+            style={[styles.card, { borderColor: theme.border, backgroundColor: theme.background }]}
+            onPress={handleCardPress}
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+          >
+            {card.image ? (
+              <Image
+                source={{ uri: card.image }}
+                style={[styles.cardImage, { backgroundColor: theme.card }]}
+                accessible={false}
+              />
+            ) : null}
+            <View style={styles.cardText} accessible={false}>
+              {card.providerName ? (
+                <Text
+                  style={[styles.cardProvider, { color: theme.textSecondary }]}
+                  numberOfLines={1}
+                  accessible={false}
+                >
+                  {card.providerName}
+                </Text>
+              ) : null}
+              <Text
+                style={[styles.cardTitle, { color: theme.text }]}
+                numberOfLines={2}
+                accessible={false}
+              >
+                {card.title || card.url}
+              </Text>
+              {card.description ? (
+                <Text
+                  style={[styles.cardDescription, { color: theme.textSecondary }]}
+                  numberOfLines={2}
+                  accessible={false}
+                >
+                  {card.description}
+                </Text>
+              ) : null}
+            </View>
+          </TouchableOpacity>
+        ) : null}
+
+        {/* Poll */}
+        {poll && !bodyHidden && (
+          <View style={styles.pollContainer} importantForAccessibility="no-hide-descendants">
+            {poll.options.map((option, index) => {
+              const votes = option.votesCount ?? 0;
+              const share = pollTotalVotes > 0 ? votes / pollTotalVotes : 0;
+              const isOwnVote = poll.ownVotes?.includes(index);
+              const isSelected = pollSelection.includes(index);
+
+              return (
+                <TouchableOpacity
+                  key={`${poll.id}-${index}`}
+                  style={[styles.pollOption, { borderColor: isSelected ? theme.primary : theme.border }]}
+                  onPress={() => handlePollOptionPress(index)}
+                  disabled={!pollVotable}
+                  accessible={false}
+                >
+                  {pollShowsResults && (
+                    <View
+                      style={[
+                        styles.pollBar,
+                        { width: `${Math.round(share * 100)}%`, backgroundColor: theme.primary, opacity: 0.18 },
+                      ]}
+                      accessible={false}
+                    />
+                  )}
+                  <View style={styles.pollOptionRow} accessible={false}>
+                    {!pollShowsResults && (
+                      <IconSymbol
+                        ios_icon_name={
+                          poll.multiple
+                            ? (isSelected ? 'checkmark.square.fill' : 'square')
+                            : (isSelected ? 'largecircle.fill.circle' : 'circle')
+                        }
+                        android_material_icon_name={
+                          poll.multiple
+                            ? (isSelected ? 'check-box' : 'check-box-outline-blank')
+                            : (isSelected ? 'radio-button-checked' : 'radio-button-unchecked')
+                        }
+                        size={20}
+                        color={isSelected ? theme.primary : theme.textSecondary}
+                        accessible={false}
+                      />
+                    )}
+                    <Text
+                      style={[
+                        styles.pollOptionText,
+                        { color: theme.text, fontWeight: isOwnVote ? '700' : '400' },
+                      ]}
+                      accessible={false}
+                    >
+                      {option.title}
+                    </Text>
+                    {pollShowsResults && (
+                      <Text style={[styles.pollPercent, { color: theme.textSecondary }]} accessible={false}>
+                        {Math.round(share * 100)}%
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            {poll.multiple && pollVotable && (
+              <TouchableOpacity
+                style={[
+                  styles.pollVoteButton,
+                  { backgroundColor: theme.primary },
+                  pollSelection.length === 0 && styles.pollVoteButtonDisabled,
+                ]}
+                onPress={() => submitPollVote(pollSelection)}
+                disabled={pollSelection.length === 0}
+                accessible={false}
+              >
+                <Text style={styles.pollVoteButtonText} accessible={false}>Vote</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.pollFooter} accessible={false}>
+              {pollSubmitting && <ActivityIndicator size="small" color={theme.textSecondary} />}
+              <Text style={[styles.pollMeta, { color: theme.textSecondary }]} accessible={false}>
+                {pollTotalVotes} {pollTotalVotes === 1 ? 'vote' : 'votes'}
+                {pollExpired ? ' · Closed' : ''}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Media attachments */}
+        {actualPost.mediaAttachments && actualPost.mediaAttachments.length > 0 && (
+          mediaHidden ? (
+            <TouchableOpacity
+              style={[styles.sensitiveCover, { backgroundColor: theme.card, borderColor: theme.border }]}
+              onPress={toggleReveal}
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
+            >
+              <IconSymbol
+                ios_icon_name="eye.slash"
+                android_material_icon_name="visibility-off"
+                size={26}
+                color={theme.textSecondary}
+                accessible={false}
+              />
+              <Text style={[styles.sensitiveCoverText, { color: theme.textSecondary }]} accessible={false}>
+                {hasContentWarning ? 'Media hidden' : 'Sensitive content'}
+              </Text>
+              <Text style={[styles.sensitiveCoverHint, { color: theme.primary }]} accessible={false}>
+                Tap to show
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.mediaContainer} importantForAccessibility="no-hide-descendants">
+              {actualPost.mediaAttachments.slice(0, 4).map((media, index) => (
+                media.type === 'video' || media.type === 'gifv' || media.type === 'audio' ? (
+                  <MediaPlayer key={media.id || index} attachment={media} />
+                ) : (
+                  <Image
+                    key={media.id || index}
+                    source={resolveImageSource(media.url)}
+                    style={styles.mediaImage}
+                    accessible={false}
+                  />
+                )
+              ))}
+            </View>
+          )
+        )}
+
+        {/* Actions - hidden from accessibility tree, visual only */}
+        <View
+          style={styles.actions}
           accessible={false}
+          importantForAccessibility="no-hide-descendants"
         >
-          <IconSymbol
-            ios_icon_name={favourited ? "heart.fill" : "heart"}
-            android_material_icon_name={favourited ? "favorite" : "favorite-border"}
-            size={20}
-            color={favourited ? theme.error : theme.textSecondary}
-            accessible={false}
-          />
-          <Text
-            style={[styles.actionCount, { color: favourited ? theme.error : theme.textSecondary }]}
-            accessible={false}
-          >
-            {favouritesCount}
-          </Text>
-        </TouchableOpacity>
-
-        {onBookmark && (
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={handleBookmark}
+            onPress={handleReply}
             accessible={false}
           >
             <IconSymbol
-              ios_icon_name={bookmarked ? "bookmark.fill" : "bookmark"}
-              android_material_icon_name={bookmarked ? "bookmark" : "bookmark-border"}
+              ios_icon_name="bubble.left"
+              android_material_icon_name="chat"
               size={20}
-              color={bookmarked ? theme.primary : theme.textSecondary}
+              color={theme.textSecondary}
+              accessible={false}
+            />
+            <Text
+              style={[styles.actionCount, { color: theme.textSecondary }]}
+              accessible={false}
+            >
+              {repliesCount}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleReblog}
+            accessible={false}
+          >
+            <IconSymbol
+              ios_icon_name="arrow.2.squarepath"
+              android_material_icon_name="repeat"
+              size={20}
+              color={reblogged ? theme.success : theme.textSecondary}
+              accessible={false}
+            />
+            <Text
+              style={[styles.actionCount, { color: reblogged ? theme.success : theme.textSecondary }]}
+              accessible={false}
+            >
+              {reblogsCount}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleFavourite}
+            accessible={false}
+          >
+            <IconSymbol
+              ios_icon_name={favourited ? "heart.fill" : "heart"}
+              android_material_icon_name={favourited ? "favorite" : "favorite-border"}
+              size={20}
+              color={favourited ? theme.error : theme.textSecondary}
+              accessible={false}
+            />
+            <Text
+              style={[styles.actionCount, { color: favourited ? theme.error : theme.textSecondary }]}
+              accessible={false}
+            >
+              {favouritesCount}
+            </Text>
+          </TouchableOpacity>
+
+          {onBookmark && (
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleBookmark}
+              accessible={false}
+            >
+              <IconSymbol
+                ios_icon_name={bookmarked ? "bookmark.fill" : "bookmark"}
+                android_material_icon_name={bookmarked ? "bookmark" : "bookmark-border"}
+                size={20}
+                color={bookmarked ? theme.primary : theme.textSecondary}
+                accessible={false}
+              />
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleShare}
+            accessible={false}
+          >
+            <IconSymbol
+              ios_icon_name="square.and.arrow.up"
+              android_material_icon_name="share"
+              size={20}
+              color={theme.textSecondary}
               accessible={false}
             />
           </TouchableOpacity>
-        )}
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={handleShare}
-          accessible={false}
-        >
-          <IconSymbol
-            ios_icon_name="square.and.arrow.up"
-            android_material_icon_name="share"
-            size={20}
-            color={theme.textSecondary}
-            accessible={false}
-          />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </AccessibilityFocusView>
   );
 }
 

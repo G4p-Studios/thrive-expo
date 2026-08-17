@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
+import { primeCurrentAccount } from '@/lib/mastodon';
 import { checkForNewNotifications } from './poller';
 import { initialiseNotifications, getPermissionState } from './setup';
 import { registerBackgroundCheck } from './background';
@@ -26,6 +27,8 @@ export function useNotifications(): void {
     let cancelled = false;
 
     (async () => {
+      // Needed by the mention earcon, which cannot await inside a handler.
+      await primeCurrentAccount();
       await initialiseNotifications();
       if (cancelled) return;
 

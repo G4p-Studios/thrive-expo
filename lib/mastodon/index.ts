@@ -42,6 +42,14 @@ export {
   getReplyTarget,
 } from './mentions';
 
+// Current account
+export {
+  primeCurrentAccount,
+  getCurrentAccountSync,
+  clearCurrentAccountCache,
+  postMentionsCurrentUser,
+} from './currentAccount';
+
 // HTML
 export { stripHtml } from './html';
 

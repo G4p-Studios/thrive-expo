@@ -76,5 +76,37 @@ Which sound plays for what is decided in two places:
 A direct message is a `mention` whose status is `direct` — that visibility check
 is the only thing separating the DM sound from the mention sound.
 
-No in-app sounds are set yet: `IN_APP_SOUNDS` is still empty, so
-`playInAppSound` is a no-op until files are registered there.
+### In-app sounds
+
+| File | Plays when |
+| --- | --- |
+| `new_toot.wav` | A post that was not there before arrives in the home timeline |
+| `send_toot.wav` | Your post goes out |
+| `send_reply.wav` | Your reply goes out |
+| `send_boost.wav` | You boost something |
+| `favorite.wav` / `unfavorite.wav` | You like or unlike |
+| `vote.wav` | The server accepts your poll vote |
+
+Registered in `IN_APP_SOUNDS` in `lib/notifications/sounds.ts`. Players are
+cached and rewound rather than rebuilt, so liking several posts quickly does not
+cut each sound short.
+
+### Earcons
+
+`image.wav`, `media.wav` and `mention.wav` play the instant screen reader focus
+lands on a post of that kind, so its nature is known before the label has been
+read out. Only one fires per post — a mention wins over media, since it is the
+more urgent thing to know.
+
+React Native has no accessibility-focus event of its own, only
+`onAccessibilityAction`, `onAccessibilityEscape` and `onAccessibilityTap`. These
+therefore go through a local native module in `modules/accessibility-focus`,
+which wraps `UIAccessibility.elementFocusedNotification` on iOS and
+`TYPE_VIEW_ACCESSIBILITY_FOCUSED` on Android and surfaces them as an
+`onAccessibilityFocus` prop.
+
+Changing that module needs a rebuild — native code is not reloaded by Fast
+Refresh — and it can only be verified on a device with VoiceOver or TalkBack
+actually running.
+
+`poll.wav` is bundled but not yet attached to anything.
