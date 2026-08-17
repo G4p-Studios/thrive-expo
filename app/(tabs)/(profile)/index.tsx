@@ -16,7 +16,7 @@ import {
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { MastodonAccount } from '@/types/mastodon';
-import { verifyCredentials, clearAuth, getAccountCache, getInstanceUrl } from '@/lib/mastodon';
+import { verifyCredentials, signOut, getAccountCache, getInstanceUrl } from '@/lib/mastodon';
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
   if (!source) return { uri: '' };
@@ -29,7 +29,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [account, setAccount] = useState<MastodonAccount | null>(null);
   const [loading, setLoading] = useState(true);
-  const [disconnectModalVisible, setDisconnectModalVisible] = useState(false);
+  const [signOutModalVisible, setSignOutModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
 
@@ -75,19 +75,19 @@ export default function ProfileScreen() {
     router.push('/profile-detail');
   };
 
-  const handleDisconnectConfirm = () => {
-    console.log('User tapped Disconnect button');
-    setDisconnectModalVisible(true);
+  const handleSignOutConfirm = () => {
+    console.log('User tapped sign out');
+    setSignOutModalVisible(true);
   };
 
-  const handleDisconnect = async () => {
-    setDisconnectModalVisible(false);
+  const handleSignOut = async () => {
+    setSignOutModalVisible(false);
     setLoading(true);
 
     try {
-      console.log('Disconnecting Mastodon account...');
+      console.log('Signing out...');
       // Clear all local auth data
-      await clearAuth();
+      await signOut();
       console.log('Local auth data cleared');
     } catch (error: any) {
       console.error('Failed to clear auth data:', error);
@@ -296,15 +296,15 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Disconnect Button */}
+        {/* Sign out */}
         <View style={styles.section}>
           <TouchableOpacity
-            style={[styles.disconnectButton, { borderColor: theme.border }]}
-            onPress={handleDisconnectConfirm}
+            style={[styles.signOutButton, { borderColor: theme.border }]}
+            onPress={handleSignOutConfirm}
             accessible={true}
             accessibilityRole="button"
-            accessibilityLabel="Disconnect Mastodon account"
-            accessibilityHint="Double tap to disconnect your Mastodon account"
+            accessibilityLabel="Sign out"
+            accessibilityHint="Double tap to sign out of your Mastodon account"
           >
             <IconSymbol
               ios_icon_name="link.badge.minus"
@@ -313,17 +313,17 @@ export default function ProfileScreen() {
               color={theme.error}
               style={{ marginRight: 8 }}
             />
-            <Text style={[styles.disconnectButtonText, { color: theme.error }]}>Disconnect</Text>
+            <Text style={[styles.signOutButtonText, { color: theme.error }]}>Sign out</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* Disconnect Confirmation Modal */}
+      {/* Sign out confirmation */}
       <Modal
-        visible={disconnectModalVisible}
+        visible={signOutModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setDisconnectModalVisible(false)}
+        onRequestClose={() => setSignOutModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
@@ -335,19 +335,19 @@ export default function ProfileScreen() {
               style={{ marginBottom: 16 }}
             />
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Disconnect Account?
+              Sign out?
             </Text>
             <Text style={[styles.modalMessage, { color: theme.text }]}>
-              Are you sure you want to disconnect your Mastodon account? You&apos;ll need to reconnect to use the app.
+              You will need to sign in again to use Thrive. Your posts and account are not affected.
             </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel, { borderColor: theme.border }]}
-                onPress={() => setDisconnectModalVisible(false)}
+                onPress={() => setSignOutModalVisible(false)}
                 accessible={true}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
-                accessibilityHint="Double tap to cancel disconnection"
+                accessibilityHint="Double tap to stay signed in"
               >
                 <Text style={[styles.modalButtonTextCancel, { color: theme.text }]}>
                   Cancel
@@ -355,13 +355,13 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm, { backgroundColor: theme.error }]}
-                onPress={handleDisconnect}
+                onPress={handleSignOut}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel="Disconnect"
-                accessibilityHint="Double tap to confirm disconnection"
+                accessibilityLabel="Sign out"
+                accessibilityHint="Double tap to confirm signing out"
               >
-                <Text style={styles.modalButtonTextConfirm}>Disconnect</Text>
+                <Text style={styles.modalButtonTextConfirm}>Sign out</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  disconnectButton: {
+  signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -493,7 +493,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  disconnectButtonText: {
+  signOutButtonText: {
     fontSize: 16,
     fontWeight: '600',
   },

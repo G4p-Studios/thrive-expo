@@ -1,7 +1,7 @@
-import { get, post, del, put } from '../client';
-import { mapPost } from '../mappers';
+import { get, post, del, put, getPaginated, type PageCursor } from '../client';
+import { mapAccount, mapPost } from '../mappers';
 import { getInstanceUrl } from '../storage';
-import type { MastodonPost } from '@/types/mastodon';
+import type { MastodonAccount, MastodonPost } from '@/types/mastodon';
 
 /**
  * Get a single post by ID
@@ -256,4 +256,66 @@ export async function unmuteConversation(postId: string): Promise<MastodonPost> 
   const instanceUrl = await getInstanceUrl() || '';
   const raw = await post<any>(`/api/v1/statuses/${encodeURIComponent(postId)}/unmute`, {});
   return mapPost(raw, instanceUrl);
+}
+
+interface AccountListResponse {
+  accounts: MastodonAccount[];
+  next: PageCursor | null;
+}
+
+/**
+ * Who favourited a post.
+ */
+export async function getFavouritedBy(
+  postId: string,
+  cursor?: PageCursor | null
+): Promise<AccountListResponse> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const { items, next } = await getPaginated<any[]>(
+    `/api/v1/statuses/${encodeURIComponent(postId)}/favourited_by`,
+    { limit: '40', ...(cursor ?? {}) }
+  );
+  return { accounts: (items || []).map(a => mapAccount(a, instanceUrl)), next };
+}
+
+/**
+ * Who boosted a post.
+ */
+export async function getRebloggedBy(
+  postId: string,
+  cursor?: PageCursor | null
+): Promise<AccountListResponse> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const { items, next } = await getPaginated<any[]>(
+    `/api/v1/statuses/${encodeURIComponent(postId)}/reblogged_by`,
+    { limit: '40', ...(cursor ?? {}) }
+  );
+  return { accounts: (items || []).map(a => mapAccount(a, instanceUrl)), next };
+}
+
+export interface StatusEdit {
+  content: string;
+  spoilerText: string;
+  sensitive: boolean;
+  createdAt: string;
+  account: MastodonAccount;
+}
+
+/**
+ * Every version of a post that has been edited.
+ *
+ * The first entry is the original, so a post showing an edited marker can be
+ * compared against what it used to say.
+ */
+export async function getStatusHistory(postId: string): Promise<StatusEdit[]> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const raw = await get<any[]>(`/api/v1/statuses/${encodeURIComponent(postId)}/history`);
+
+  return (raw || []).map(edit => ({
+    content: edit.content ?? '',
+    spoilerText: edit.spoiler_text ?? '',
+    sensitive: !!edit.sensitive,
+    createdAt: edit.created_at ?? '',
+    account: mapAccount(edit.account, instanceUrl),
+  }));
 }

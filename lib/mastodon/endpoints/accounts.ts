@@ -307,3 +307,82 @@ export async function getFavourites(maxId?: string): Promise<FavouritesResponse>
   const nextMaxId = posts.length > 0 ? posts[posts.length - 1].id : null;
   return { posts, nextMaxId };
 }
+
+export interface FollowOptions {
+  /** Show this account's boosts in your home timeline. Defaults to true. */
+  reblogs?: boolean;
+  /** Get a notification every time they post. */
+  notify?: boolean;
+  /** Only receive posts in these languages. */
+  languages?: string[];
+}
+
+/**
+ * Follow an account with options.
+ *
+ * `follow` alone sends no body, so it always uses the server defaults. This is
+ * what turns on "notify me when they post" or silences a prolific booster
+ * without unfollowing them.
+ */
+export async function followWithOptions(
+  accountId: string,
+  options: FollowOptions
+): Promise<MastodonRelationship> {
+  const body: Record<string, unknown> = {};
+  if (options.reblogs !== undefined) body.reblogs = options.reblogs;
+  if (options.notify !== undefined) body.notify = options.notify;
+  if (options.languages?.length) body.languages = options.languages;
+
+  const raw = await post<any>(`/api/v1/accounts/${encodeURIComponent(accountId)}/follow`, body);
+  return mapRelationship(raw);
+}
+
+/**
+ * Set a private note on an account, visible only to you.
+ *
+ * Passing an empty string clears it.
+ */
+export async function setAccountNote(
+  accountId: string,
+  comment: string
+): Promise<MastodonRelationship> {
+  const raw = await post<any>(`/api/v1/accounts/${encodeURIComponent(accountId)}/note`, {
+    comment,
+  });
+  return mapRelationship(raw);
+}
+
+/**
+ * Feature an account on your profile.
+ */
+export async function endorseAccount(accountId: string): Promise<MastodonRelationship> {
+  const raw = await post<any>(`/api/v1/accounts/${encodeURIComponent(accountId)}/pin`, {});
+  return mapRelationship(raw);
+}
+
+export async function unendorseAccount(accountId: string): Promise<MastodonRelationship> {
+  const raw = await post<any>(`/api/v1/accounts/${encodeURIComponent(accountId)}/unpin`, {});
+  return mapRelationship(raw);
+}
+
+/**
+ * Accounts you have featured on your profile.
+ */
+export async function getEndorsements(
+  cursor?: PageCursor | null
+): Promise<CursorAccountsResponse> {
+  return getAccountCollection('/api/v1/endorsements', cursor);
+}
+
+/**
+ * Remove somebody from your followers without blocking them.
+ *
+ * A quieter alternative to a block: they are not told, and can follow again.
+ */
+export async function removeFromFollowers(accountId: string): Promise<MastodonRelationship> {
+  const raw = await post<any>(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/remove_from_followers`,
+    {}
+  );
+  return mapRelationship(raw);
+}

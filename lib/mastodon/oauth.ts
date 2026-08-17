@@ -7,8 +7,12 @@ import {
   setAccessToken,
   setInstanceUrl,
   setAccountCache,
+  getAccessToken,
+  getInstanceUrl,
+  clearAuth,
   type OAuthCredentials,
 } from './storage';
+import { clearCurrentAccountCache } from './currentAccount';
 import type { MastodonAccount } from '@/types/mastodon';
 
 const APP_NAME = 'Thrive';
@@ -187,4 +191,47 @@ export async function exchangeCode(
     accessToken,
     account,
   };
+}
+
+/**
+ * Revoke the current token with the server, then clear it locally.
+ *
+ * Clearing storage alone leaves the token valid on the server indefinitely —
+ * anyone who obtained it could keep using it long after the user believes they
+ * signed out.
+ *
+ * The local clear happens regardless of whether revocation succeeds: failing to
+ * reach the server must not leave somebody stuck signed in.
+ */
+export async function signOut(): Promise<{ revoked: boolean }> {
+  const [instanceUrl, accessToken] = await Promise.all([
+    getInstanceUrl(),
+    getAccessToken(),
+  ]);
+
+  let revoked = false;
+
+  if (instanceUrl && accessToken) {
+    try {
+      const credentials = await getOAuthApp(instanceUrl);
+
+      // Revocation is authenticated by the app's own credentials, not the token.
+      await mastodonFetch(instanceUrl, '/oauth/revoke', {
+        method: 'POST',
+        body: {
+          client_id: credentials?.clientId,
+          client_secret: credentials?.clientSecret,
+          token: accessToken,
+        },
+      });
+      revoked = true;
+    } catch (error) {
+      console.warn('[OAuth] Could not revoke the token:', error);
+    }
+  }
+
+  await clearAuth();
+  clearCurrentAccountCache();
+
+  return { revoked };
 }

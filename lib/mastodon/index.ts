@@ -21,6 +21,7 @@ export {
   exchangeCode,
   getRedirectUri,
   normalizeInstanceUrl,
+  signOut,
 } from './oauth';
 
 // Client
