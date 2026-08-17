@@ -109,6 +109,39 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[styles.settingItem, { borderBottomColor: theme.border }]}
+            onPress={() => router.push('/notification-filtering' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Notification filtering"
+            accessibilityHint="Double tap to decide which notifications are held for review"
+          >
+            <View style={styles.settingInfo}>
+              <IconSymbol
+                ios_icon_name="line.3.horizontal.decrease.circle.fill"
+                android_material_icon_name="filter-list"
+                size={24}
+                color={theme.primary}
+                style={{ marginRight: 16 }}
+              />
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>
+                  Notification filtering
+                </Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Hold notifications from strangers for review
+                </Text>
+              </View>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={theme.textSecondary}
+            />
+          </TouchableOpacity>
+
           <View style={[styles.settingItem, { borderBottomColor: theme.border }]}>
             <View style={styles.settingInfo}>
               <IconSymbol
