@@ -28,6 +28,7 @@ import {
   unreblog,
   bookmark,
   unbookmark,
+  useQuoteSupport,
 } from '@/lib/mastodon';
 
 export default function HomeScreen() {
@@ -41,6 +42,11 @@ export default function HomeScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
+  const [quotingPost, setQuotingPost] = useState<MastodonPost | undefined>(undefined);
+
+  // Hidden entirely on servers older than 4.4, which accept the request and
+  // drop the quote, posting the comment with nothing attached.
+  const quoteSupported = useQuoteSupport();
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
@@ -122,6 +128,14 @@ export default function HomeScreen() {
       setErrorModalVisible(true);
     }
   };
+
+  // Quoting opens the same composer as a reply, but attaches the post
+  // instead of answering it.
+  const handleQuote = useCallback((post: MastodonPost) => {
+    setReplyToPost(undefined);
+    setQuotingPost(post);
+    setComposeVisible(true);
+  }, []);
 
   const handleReply = useCallback((postId: string) => {
     setPosts((currentPosts) => {
@@ -252,8 +266,9 @@ export default function HomeScreen() {
       onReblog={handleReblog}
       onFavourite={handleFavourite}
       onBookmark={handleBookmark}
+      onQuote={quoteSupported ? handleQuote : undefined}
     />
-  ), [handleReply, handleReblog, handleFavourite, handleBookmark]);
+  ), [handleReply, handleReblog, handleFavourite, handleBookmark, quoteSupported, handleQuote]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -374,9 +389,11 @@ export default function HomeScreen() {
         onClose={() => {
           setComposeVisible(false);
           setReplyToPost(undefined);
+          setQuotingPost(undefined);
         }}
         onSubmit={handleSubmitPost}
         replyToPost={replyToPost}
+        quotingPost={quotingPost}
       />
 
       {/* Error Modal */}

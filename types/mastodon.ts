@@ -280,6 +280,12 @@ export interface MastodonInstanceConfig {
    * assumed.
    */
   streamingUrl: string | null;
+  /**
+   * The server's reported version, e.g. `4.4.1` or `4.4.0+glitch`. Empty when
+   * the server omits it. Use {@link supportsQuotePosts} rather than comparing
+   * this by hand.
+   */
+  version: string;
 }
 
 export interface MastodonEmoji {

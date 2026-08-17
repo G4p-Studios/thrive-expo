@@ -26,6 +26,7 @@ import {
   unreblog,
   bookmark,
   unbookmark,
+  useQuoteSupport,
 } from '@/lib/mastodon';
 import { MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -44,6 +45,11 @@ export default function ListTimelineScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
+  const [quotingPost, setQuotingPost] = useState<MastodonPost | undefined>(undefined);
+
+  // Hidden entirely on servers older than 4.4, which accept the request and
+  // drop the quote, posting the comment with nothing attached.
+  const quoteSupported = useQuoteSupport();
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
@@ -76,6 +82,14 @@ export default function ListTimelineScreen() {
       setRefreshing(false);
     }
   }, [listId]);
+
+  // Quoting opens the same composer as a reply, but attaches the post
+  // instead of answering it.
+  const handleQuote = useCallback((post: MastodonPost) => {
+    setReplyToPost(undefined);
+    setQuotingPost(post);
+    setComposeVisible(true);
+  }, []);
 
   const handleReply = (postId: string) => {
     console.log('User tapped reply on post:', postId);
@@ -244,6 +258,7 @@ export default function ListTimelineScreen() {
             onReblog={handleReblog}
             onFavourite={handleFavourite}
             onBookmark={handleBookmark}
+            onQuote={quoteSupported ? handleQuote : undefined}
           />
         )}
         refreshControl={
@@ -279,9 +294,11 @@ export default function ListTimelineScreen() {
         onClose={() => {
           setComposeVisible(false);
           setReplyToPost(undefined);
+          setQuotingPost(undefined);
         }}
         onSubmit={handleSubmitPost}
         replyToPost={replyToPost}
+        quotingPost={quotingPost}
       />
 
       {/* Error Modal */}

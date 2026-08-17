@@ -33,6 +33,8 @@ import {
   generateIdempotencyKey,
   getStatusSource,
   getPreferences,
+  stripHtml,
+  joinSpokenParts,
 } from '@/lib/mastodon';
 import type { PostVisibility } from '@/lib/mastodon';
 import {
@@ -42,6 +44,21 @@ import {
 } from '@/types/mastodon';
 import AudioRecorder from '@/components/AudioRecorder';
 import { playInAppSound } from '@/lib/notifications';
+
+/**
+ * What a screen reader should say for the quoted post shown in the composer.
+ *
+ * It is read as one thing rather than three, because at this point it is a
+ * fixed reference the writer is commenting on, not something they can edit.
+ */
+function buildQuotedPreviewLabel(quoted: MastodonPost, name: string): string {
+  const spoiler = quoted.spoilerText?.trim();
+  return joinSpokenParts([
+    `Quoting ${name}, @${quoted.account.acct}`,
+    // Quoting somebody does not lift the warning they put on their own post.
+    spoiler ? `Content warning: ${spoiler}` : stripHtml(quoted.content ?? ''),
+  ]);
+}
 
 /** Everything the composer collects alongside the post body. */
 export interface ComposeSubmission {
@@ -55,6 +72,8 @@ export interface ComposeSubmission {
   visibility?: PostVisibility;
   /** Stable across retries of the same post; see `generateIdempotencyKey`. */
   idempotencyKey?: string;
+  /** The post being quoted, when the composer was opened to quote one. */
+  quotedStatusId?: string;
 }
 
 const VISIBILITY_OPTIONS: {
@@ -79,6 +98,12 @@ interface ComposeModalProps {
   /** When set, the composer edits this post instead of creating a new one. */
   editingPost?: MastodonPost;
   /**
+   * When set, the new post quotes this one. Unlike a reply, a quote adds no
+   * mentions and does not inherit the quoted post's audience — quoting is a
+   * public act of commentary, not a private answer.
+   */
+  quotingPost?: MastodonPost;
+  /**
    * Audience for a brand new post. A reply always inherits the audience of the
    * post it answers, so this only applies when there is nothing to inherit.
    */
@@ -91,6 +116,7 @@ export default function ComposeModal({
   onSubmit,
   replyToPost,
   editingPost,
+  quotingPost,
   initialVisibility,
 }: ComposeModalProps) {
   const colorScheme = useColorScheme();
@@ -325,6 +351,9 @@ export default function ComposeModal({
         // Mastodon does not allow changing a post's audience after the fact.
         visibility: editingPost ? undefined : visibility,
         idempotencyKey: idempotencyKeyRef.current,
+        // A quote cannot be added to a post after the fact, so this is only
+        // ever sent when creating one.
+        quotedStatusId: editingPost ? undefined : quotingPost?.id,
       });
 
       playInAppSound(replyToPost ? 'sendReply' : 'sendPost');
@@ -485,7 +514,12 @@ export default function ComposeModal({
     !uploadingMedia &&
     !loadingSource;
 
-  const title = editingPost
+  const quotedName =
+    quotingPost?.account.displayName?.trim() || quotingPost?.account.username || '';
+
+  const title = quotingPost
+    ? `Quote @${quotingPost.account.acct}`
+    : editingPost
     ? 'Edit post'
     : replyToPost
       ? `Reply to @${getReplyTarget(replyToPost).account.acct}`
@@ -585,16 +619,55 @@ export default function ComposeModal({
 
           <TextInput
             style={[styles.input, { color: theme.text }]}
-            placeholder="What's on your mind?"
+            placeholder={quotingPost ? 'Add a comment' : "What's on your mind?"}
             placeholderTextColor={theme.textSecondary}
             multiline
             value={content}
             onChangeText={handleContentChange}
             autoFocus={!cwEnabled}
             accessible={true}
-            accessibilityLabel="Post content"
-            accessibilityHint="Enter the text for your post"
+            accessibilityLabel={quotingPost ? 'Your comment' : 'Post content'}
+            accessibilityHint={
+              quotingPost
+                ? 'Enter what you want to say about the quoted post'
+                : 'Enter the text for your post'
+            }
           />
+
+          {/* What is being quoted, shown below the box the way it will appear
+              in the finished post. One accessibility element, because it is a
+              single thing being referred to rather than controls. */}
+          {quotingPost && (
+            <View
+              style={[styles.quoted, { borderColor: theme.border, backgroundColor: theme.card }]}
+              accessible={true}
+              accessibilityLabel={buildQuotedPreviewLabel(quotingPost, quotedName)}
+            >
+              <Text
+                style={[styles.quotedAuthor, { color: theme.textSecondary }]}
+                numberOfLines={1}
+                accessible={false}
+              >
+                {quotedName} @{quotingPost.account.acct}
+              </Text>
+              {quotingPost.spoilerText?.trim() ? (
+                <Text
+                  style={[styles.quotedBody, { color: theme.textSecondary }]}
+                  accessible={false}
+                >
+                  Content warning: {quotingPost.spoilerText.trim()}
+                </Text>
+              ) : (
+                <Text
+                  style={[styles.quotedBody, { color: theme.text }]}
+                  numberOfLines={4}
+                  accessible={false}
+                >
+                  {stripHtml(quotingPost.content ?? '')}
+                </Text>
+              )}
+            </View>
+          )}
 
           {/* Media thumbnails */}
           {(mediaAttachments.length > 0 || uploadingMedia) && (
@@ -1020,6 +1093,15 @@ const styles = StyleSheet.create({
     minHeight: 120,
     maxHeight: 300,
   },
+  quoted: {
+    marginTop: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 10,
+    gap: 4,
+  },
+  quotedAuthor: { fontSize: 13, fontWeight: '600' },
+  quotedBody: { fontSize: 14, lineHeight: 20 },
   mediaPreview: {
     flexDirection: 'row',
     marginTop: 12,

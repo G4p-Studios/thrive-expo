@@ -19,7 +19,40 @@ export const DEFAULT_INSTANCE_CONFIG: MastodonInstanceConfig = {
   videoSizeLimit: 103809024,
   rules: [],
   streamingUrl: null,
+  version: '',
 };
+
+/**
+ * Read the leading `major.minor` out of a Mastodon version string.
+ *
+ * Versions in the wild carry suffixes — `4.4.0+glitch`, `4.3.1-beta`, or a
+ * fork's own scheme entirely. Returns null when nothing sensible can be read,
+ * which callers should treat as "unknown", not as "old".
+ */
+export function parseServerVersion(version: string): { major: number; minor: number } | null {
+  const match = /^\s*v?(\d+)\.(\d+)/.exec(version ?? '');
+  if (!match) return null;
+  return { major: Number(match[1]), minor: Number(match[2]) };
+}
+
+/**
+ * Whether this server can attach a quote to a post.
+ *
+ * Quote posts arrived in Mastodon 4.4. Older servers accept the request and
+ * silently drop `quoted_status_id`, which would post somebody's commentary
+ * with nothing attached — so the control is hidden rather than offered and
+ * quietly ignored.
+ *
+ * An unreadable version is treated as capable: a fork with its own numbering
+ * is far more likely to be current than to be pre-4.4, and the cost of being
+ * wrong that way is a post that needs deleting rather than a feature that
+ * silently never appears.
+ */
+export function supportsQuotePosts(config: MastodonInstanceConfig): boolean {
+  const parsed = parseServerVersion(config.version);
+  if (!parsed) return true;
+  return parsed.major > 4 || (parsed.major === 4 && parsed.minor >= 4);
+}
 
 function toPositiveInt(value: unknown, fallback: number): number {
   const n = typeof value === 'number' ? value : Number(value);
@@ -48,6 +81,7 @@ export function mapInstanceConfig(raw: any): MastodonInstanceConfig {
     // `rules` sits at the top level of the Instance entity, not under
     // `configuration`. Reporting a rule violation needs these.
     streamingUrl: raw?.configuration?.urls?.streaming ?? null,
+    version: typeof raw?.version === 'string' ? raw.version : '',
     rules: Array.isArray(raw?.rules)
       ? raw.rules
           .filter((rule: any) => rule && rule.id != null)

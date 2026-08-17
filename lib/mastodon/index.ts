@@ -60,6 +60,7 @@ export { stripHtml } from './html';
 
 // Quote posts
 export { buildQuoteLabel, type QuoteLabel } from './quoteLabel';
+export { useQuoteSupport } from './useQuoteSupport';
 
 // Spoken labels
 export { joinSpokenParts } from './speech';

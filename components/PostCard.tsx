@@ -26,6 +26,7 @@ import { MastodonPoll, MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import MediaPlayer from '@/components/MediaPlayer';
 import EmojiText, { stripEmojiColons } from '@/components/EmojiText';
+import ActionSheet from '@/components/ActionSheet';
 import { playInAppSound } from '@/lib/notifications';
 
 // Helper to resolve image sources
@@ -42,11 +43,17 @@ interface PostCardProps {
   onFavourite: (postId: string, currentState: boolean) => void;
   onBookmark?: (postId: string, currentState: boolean) => void;
   onPress?: (postId: string) => void;
+  /**
+   * Opens the composer with this post quoted. When absent — or when the server
+   * is too old for quote posts — boost stays a one-tap button rather than
+   * opening a menu with nothing else in it.
+   */
+  onQuote?: (post: MastodonPost) => void;
   /** When set, the translated text is shown in place of the original. */
   translation?: { content: string; detectedSourceLanguage: string; provider: string };
 }
 
-function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, translation }: PostCardProps) {
+function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, onQuote, translation }: PostCardProps) {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const theme = colorScheme === 'dark' ? colors.dark : colors.light;
@@ -63,6 +70,8 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
   const reblogsCount = post.reblogsCount || 0;
   const favouritesCount = post.favouritesCount || 0;
 
+  const [boostMenuVisible, setBoostMenuVisible] = useState(false);
+
   const handleReply = useCallback(() => {
     onReply(post.id);
   }, [onReply, post.id]);
@@ -74,6 +83,23 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
     if (!reblogged) playInAppSound('boost');
     onReblog(post.id, reblogged || false);
   }, [onReblog, post.id, reblogged]);
+
+  const handleQuote = useCallback(() => {
+    // The quote attaches to the post itself, never to somebody's boost of it.
+    onQuote?.(actualPost);
+  }, [onQuote, actualPost]);
+
+  /**
+   * Boost becomes a menu when quoting is available.
+   *
+   * Boosting and quoting are one gesture on every other client, and putting
+   * quote anywhere else makes it undiscoverable. The cost is a second tap on
+   * boost — the trade every client offering both has made.
+   */
+  const handleReblogPress = useCallback(() => {
+    if (onQuote) setBoostMenuVisible(true);
+    else handleReblog();
+  }, [onQuote, handleReblog]);
 
   const handleFavourite = useCallback(() => {
     playInAppSound(favourited ? 'unfavourite' : 'favourite');
@@ -338,9 +364,15 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
   const accessibilityActions = useMemo(() => {
     const actions = [
       { name: 'reply', label: 'Reply' },
+      // Boost stays direct here even though the button opens a menu: the
+      // actions rotor is already a menu, and putting another one inside it
+      // would make boosting a three-step job to save a step for touch.
       { name: 'boost', label: reblogged ? 'Unboost' : 'Boost' },
       { name: 'like', label: favourited ? 'Unlike' : 'Like' },
     ];
+    if (onQuote) {
+      actions.push({ name: 'quote', label: 'Quote' });
+    }
     if (onBookmark) {
       actions.push({ name: 'bookmark', label: bookmarked ? 'Remove bookmark' : 'Bookmark' });
     }
@@ -371,7 +403,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
     actions.push({ name: 'profile', label: `View @${actualPost.account.acct}'s profile` });
     actions.push({ name: 'share', label: 'Share' });
     return actions;
-  }, [reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed, poll, pollVotable, pollSelection, bodyHidden, actualPost.account.acct, warnFilter, blurFilter, card]);
+  }, [onQuote, reblogged, favourited, bookmarked, onBookmark, hasContentWarning, hasSensitiveMedia, revealed, poll, pollVotable, pollSelection, bodyHidden, actualPost.account.acct, warnFilter, blurFilter, card]);
 
   const onAccessibilityAction = useCallback((event: { nativeEvent: { actionName: string } }) => {
     const action = event.nativeEvent.actionName;
@@ -392,6 +424,9 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
       case 'boost':
         handleReblog();
         AccessibilityInfo.announceForAccessibility(reblogged ? 'Unboosted' : 'Boosted');
+        break;
+      case 'quote':
+        handleQuote();
         break;
       case 'like':
         handleFavourite();
@@ -414,7 +449,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
         handleShare();
         break;
     }
-  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handleShare, toggleReveal, submitPollVote, handlePollOptionPress, handleAccountPress, handleCardPress, pollSelection, reblogged, favourited, bookmarked]);
+  }, [handleReply, handleReblog, handleQuote, handleFavourite, handleBookmark, handleShare, toggleReveal, submitPollVote, handlePollOptionPress, handleAccountPress, handleCardPress, pollSelection, reblogged, favourited, bookmarked]);
 
   //  means exactly that: the server still sent the post (outside home
   // and notifications it does not drop them), so the client removes it.
@@ -784,7 +819,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={handleReblog}
+          onPress={handleReblogPress}
           accessible={false}
         >
           <IconSymbol
@@ -852,6 +887,36 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
           />
         </TouchableOpacity>
       </View>
+
+      {/* Mounted only while open. A Modal per row would otherwise cost a
+          component for every post in the list to show one sheet. */}
+      {boostMenuVisible && (
+        <ActionSheet
+          visible
+          onClose={() => setBoostMenuVisible(false)}
+          title={`@${actualPost.account.acct}'s post`}
+          items={[
+            {
+              key: 'boost',
+              label: reblogged ? 'Undo boost' : 'Boost',
+              hint: reblogged
+                ? 'Take this off your profile and your followers’ timelines'
+                : 'Share this with your followers as it is',
+              ios: 'arrow.2.squarepath',
+              android: 'repeat',
+              onPress: handleReblog,
+            },
+            {
+              key: 'quote',
+              label: 'Quote',
+              hint: 'Share it with something of your own added',
+              ios: 'quote.bubble',
+              android: 'format-quote',
+              onPress: handleQuote,
+            },
+          ]}
+        />
+      )}
     </TouchableOpacity>
   );
 }
@@ -876,7 +941,12 @@ export default memo(PostCard, (prevProps, nextProps) => {
     prevPost.poll?.id === nextPost.poll?.id &&
     prevPost.poll?.voted === nextPost.poll?.voted &&
     prevPost.poll?.votesCount === nextPost.poll?.votesCount &&
-    prevPost.repliesCount === nextPost.repliesCount
+    prevPost.repliesCount === nextPost.repliesCount &&
+    // Whether quoting is on hand decides both the boost button's behaviour and
+    // which accessibility actions exist, so a change here has to re-render.
+    !!prevProps.onQuote === !!nextProps.onQuote &&
+    prevPost.quote?.state === nextPost.quote?.state &&
+    prevPost.quote?.quotedStatus?.id === nextPost.quote?.quotedStatus?.id
   );
 });
 

@@ -33,6 +33,7 @@ import {
   unbookmark,
   follow,
   unfollow,
+  useQuoteSupport,
 } from '@/lib/mastodon';
 
 // Helper to resolve image sources
@@ -55,6 +56,11 @@ export default function ExploreScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
+  const [quotingPost, setQuotingPost] = useState<MastodonPost | undefined>(undefined);
+
+  // Hidden entirely on servers older than 4.4, which accept the request and
+  // drop the quote, posting the comment with nothing attached.
+  const quoteSupported = useQuoteSupport();
   const [viewMode, setViewMode] = useState<ViewMode>('public');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<'accounts' | 'statuses' | 'hashtags'>('statuses');
@@ -135,6 +141,14 @@ export default function ExploreScreen() {
       loadPublicTimeline(undefined, true);
     }
   };
+
+  // Quoting opens the same composer as a reply, but attaches the post
+  // instead of answering it.
+  const handleQuote = useCallback((post: MastodonPost) => {
+    setReplyToPost(undefined);
+    setQuotingPost(post);
+    setComposeVisible(true);
+  }, []);
 
   const handleReply = (postId: string) => {
     console.log('User tapped reply on post:', postId);
@@ -609,6 +623,7 @@ export default function ExploreScreen() {
               onReblog={handleReblog}
               onFavourite={handleFavourite}
               onBookmark={handleBookmark}
+              onQuote={quoteSupported ? handleQuote : undefined}
             />
           )}
           refreshControl={
@@ -657,9 +672,11 @@ export default function ExploreScreen() {
         onClose={() => {
           setComposeVisible(false);
           setReplyToPost(undefined);
+          setQuotingPost(undefined);
         }}
         onSubmit={handleSubmitPost}
         replyToPost={replyToPost}
+        quotingPost={quotingPost}
       />
 
       {/* Error Modal */}

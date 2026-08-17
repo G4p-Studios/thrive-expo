@@ -31,6 +31,7 @@ import {
   unreblog,
   bookmark,
   unbookmark,
+  useQuoteSupport,
 } from '@/lib/mastodon';
 import { MastodonPost } from '@/types/mastodon';
 import type { MastodonTranslation } from '@/lib/mastodon';
@@ -53,7 +54,19 @@ export default function PostDetailScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
+  const [quotingPost, setQuotingPost] = useState<MastodonPost | undefined>(undefined);
   const [editingPost, setEditingPost] = useState<MastodonPost | undefined>(undefined);
+
+  // Hidden entirely on servers older than 4.4, which accept the request and
+  // drop the quote, posting the comment with nothing attached.
+  const quoteSupported = useQuoteSupport();
+
+  const handleQuote = useCallback((post: MastodonPost) => {
+    setReplyToPost(undefined);
+    setEditingPost(undefined);
+    setQuotingPost(post);
+    setComposeVisible(true);
+  }, []);
   const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
   const [reportTarget, setReportTarget] = useState<MastodonPost | undefined>(undefined);
   const [menuTargetId, setMenuTargetId] = useState<string | undefined>(undefined);
@@ -251,6 +264,7 @@ export default function PostDetailScreen() {
           onReblog={handleReblog}
           onFavourite={handleFavourite}
           onBookmark={handleBookmark}
+          onQuote={quoteSupported ? handleQuote : undefined}
           onPress={handlePostPress}
           translation={translations[item.post.id]}
         />
@@ -283,7 +297,7 @@ export default function PostDetailScreen() {
         )}
       </View>
     );
-  }, [handleReply, handleReblog, handleFavourite, handleBookmark, handlePostPress, currentAccountId, translations, theme.primary, theme.border, theme.textSecondary]);
+  }, [handleReply, handleReblog, handleFavourite, handleBookmark, quoteSupported, handleQuote, handlePostPress, currentAccountId, translations, theme.primary, theme.border, theme.textSecondary]);
 
   const menuPost = threadItems.find(i => i.post.id === menuTargetId)?.post;
   const menuIsOwn =
@@ -386,10 +400,12 @@ export default function PostDetailScreen() {
         onClose={() => {
           setComposeVisible(false);
           setReplyToPost(undefined);
+          setQuotingPost(undefined);
           setEditingPost(undefined);
         }}
         onSubmit={handleSubmitPost}
         replyToPost={replyToPost}
+        quotingPost={quotingPost}
         editingPost={editingPost}
       />
 
