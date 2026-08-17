@@ -1,7 +1,12 @@
 import { get, post, del, put, getPaginated, type PageCursor } from '../client';
 import { mapAccount, mapPost } from '../mappers';
 import { getInstanceUrl } from '../storage';
-import type { MastodonAccount, MastodonPost } from '@/types/mastodon';
+import type {
+  MastodonAccount,
+  MastodonPost,
+  QuoteApprovalPolicy,
+  QuoteState,
+} from '@/types/mastodon';
 
 /**
  * Get a single post by ID
@@ -38,6 +43,13 @@ interface CreatePostOptions {
    * after a dropped response posts twice.
    */
   idempotencyKey?: string;
+  /**
+   * Quote another post. Mastodon 4.4+; older servers ignore it, so the post
+   * still goes out — as a plain post, without the quote.
+   */
+  quotedStatusId?: string;
+  /** Who may quote this post. Defaults to the server's setting. */
+  quoteApprovalPolicy?: QuoteApprovalPolicy;
 }
 
 /**
@@ -67,6 +79,12 @@ export async function createPost(
   }
   if (options.spoilerText) {
     body.spoiler_text = options.spoilerText;
+  }
+  if (options.quotedStatusId) {
+    body.quoted_status_id = options.quotedStatusId;
+  }
+  if (options.quoteApprovalPolicy) {
+    body.quote_approval_policy = options.quoteApprovalPolicy;
   }
 
   const headers = options.idempotencyKey
@@ -190,10 +208,42 @@ export async function getStatusSource(postId: string): Promise<MastodonStatusSou
   };
 }
 
+/**
+ * What to tell a reader when a quoted post is not being shown.
+ *
+ * Returns null for `accepted`, where the post itself is the answer. Every
+ * other state renders as text in place of the quote — a silent gap would read
+ * as a broken post, and to a screen reader as nothing at all.
+ */
+export function describeQuoteState(state: QuoteState): string | null {
+  switch (state) {
+    case 'accepted':
+      return null;
+    case 'pending':
+      return 'Waiting for the author to approve this quote';
+    case 'rejected':
+      return 'The author declined this quote';
+    case 'revoked':
+      return 'The author withdrew this quote';
+    case 'deleted':
+      return 'The quoted post was deleted';
+    case 'unauthorized':
+      return 'You cannot see the quoted post';
+    case 'blocked_account':
+      return 'Quoted post hidden because you blocked the author';
+    case 'blocked_domain':
+      return 'Quoted post hidden because you blocked its server';
+    case 'muted_account':
+      return 'Quoted post hidden because you muted the author';
+  }
+}
+
 interface EditPostOptions {
   mediaIds?: string[];
   sensitive?: boolean;
   spoilerText?: string;
+  /** Changing this does not invalidate quotes already accepted. */
+  quoteApprovalPolicy?: QuoteApprovalPolicy;
 }
 
 /**
@@ -216,6 +266,9 @@ export async function editPost(
   // Sent even when empty so clearing a content warning actually removes it.
   if (options.spoilerText !== undefined) {
     body.spoiler_text = options.spoilerText;
+  }
+  if (options.quoteApprovalPolicy) {
+    body.quote_approval_policy = options.quoteApprovalPolicy;
   }
 
   const raw = await put<any>(`/api/v1/statuses/${encodeURIComponent(postId)}`, body);
@@ -291,6 +344,61 @@ export async function getRebloggedBy(
     { limit: '40', ...(cursor ?? {}) }
   );
   return { accounts: (items || []).map(a => mapAccount(a, instanceUrl)), next };
+}
+
+/**
+ * Posts that quote this one.
+ *
+ * Only accepted quotes appear — a pending or revoked quote is not shown to
+ * anybody but its own author.
+ */
+export async function getQuotes(
+  postId: string,
+  cursor?: PageCursor | null
+): Promise<{ posts: MastodonPost[]; next: PageCursor | null }> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const { items, next } = await getPaginated<any[]>(
+    `/api/v1/statuses/${encodeURIComponent(postId)}/quotes`,
+    { limit: '20', ...(cursor ?? {}) }
+  );
+  return { posts: (items || []).map(p => mapPost(p, instanceUrl)), next };
+}
+
+/**
+ * Withdraw permission for somebody's quote of your post.
+ *
+ * The quoting post stays up but is detached: it no longer shows your post
+ * inside it. This is the remedy when a quote was auto-accepted by policy and
+ * turns out to be unwelcome, short of blocking the author.
+ */
+export async function revokeQuote(
+  postId: string,
+  quotingStatusId: string
+): Promise<MastodonPost> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const raw = await post<any>(
+    `/api/v1/statuses/${encodeURIComponent(postId)}/quotes/${encodeURIComponent(quotingStatusId)}/revoke`,
+    {}
+  );
+  return mapPost(raw, instanceUrl);
+}
+
+/**
+ * Change who may quote a post after it has gone out.
+ *
+ * Tightening the policy does not detach quotes that were already accepted —
+ * use {@link revokeQuote} for those.
+ */
+export async function setQuoteApprovalPolicy(
+  postId: string,
+  policy: QuoteApprovalPolicy
+): Promise<MastodonPost> {
+  const instanceUrl = await getInstanceUrl() || '';
+  const raw = await put<any>(
+    `/api/v1/statuses/${encodeURIComponent(postId)}/interaction_policy`,
+    { quote_approval_policy: policy }
+  );
+  return mapPost(raw, instanceUrl);
 }
 
 export interface StatusEdit {

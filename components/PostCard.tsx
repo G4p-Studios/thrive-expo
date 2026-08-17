@@ -15,7 +15,13 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
-import { voteOnPoll } from '@/lib/mastodon';
+import {
+  voteOnPoll,
+  buildQuoteLabel,
+  describeQuoteState,
+  stripHtml,
+  joinSpokenParts,
+} from '@/lib/mastodon';
 import { MastodonPoll, MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import MediaPlayer from '@/components/MediaPlayer';
@@ -79,11 +85,6 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
       onBookmark(post.id, bookmarked);
     }
   }, [onBookmark, post.id, bookmarked]);
-
-  // Strip HTML tags from content for display
-  const stripHtml = (html: string) => {
-    return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-  };
 
   // A translation replaces the body; the original stays one tap away by
   // translating again from the menu.
@@ -231,6 +232,16 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
     }
   }, [actualPost.url, actualPost.uri]);
 
+  const quoteLabel = useMemo(
+    () => buildQuoteLabel(displayName, actualPost.quote),
+    [displayName, actualPost.quote]
+  );
+
+  // Only an accepted quote carries a post to show; every other state renders
+  // as the reason instead.
+  const quotedPost =
+    actualPost.quote?.state === 'accepted' ? actualPost.quote.quotedStatus : undefined;
+
   // Combined accessibility label for the entire post
   const accessibilityLabel = useMemo(() => {
     const parts: string[] = [];
@@ -253,7 +264,12 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
         hasContentWarning ? 'Post hidden behind a content warning' : 'Post hidden by your filter'
       );
     } else {
-      parts.push(stripEmojiColons(displayContent, actualPost.emojis));
+      // The quote is announced before the body: hearing who was quoted is what
+      // tells the reader how the words that follow should be taken.
+      if (quoteLabel) parts.push(...quoteLabel.lead);
+
+      const body = stripEmojiColons(displayContent, actualPost.emojis);
+      parts.push(quoteLabel?.addedPrefix ? `${quoteLabel.addedPrefix} ${body}` : body);
       if (translation) parts.push('Translated');
       if (card?.title) {
         parts.push(
@@ -315,8 +331,8 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
     if (bookmarked) states.push('bookmarked');
     if (states.length > 0) parts.push(`You have ${states.join(', ')} this post`);
 
-    return parts.join('. ');
-  }, [isBoost, boosterDisplayName, displayName, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes, actualPost.account.acct, warnFilter, actualPost.emojis, card, translation]);
+    return joinSpokenParts(parts);
+  }, [isBoost, boosterDisplayName, displayName, timeAgo, displayContent, actualPost.mediaAttachments, repliesCount, reblogsCount, favouritesCount, favourited, reblogged, bookmarked, hasContentWarning, spoilerText, bodyHidden, mediaHidden, poll, pollShowsResults, pollExpired, pollSelection, pollTotalVotes, actualPost.account.acct, warnFilter, actualPost.emojis, card, translation, quoteLabel]);
 
   // Accessibility actions with dynamic labels
   const accessibilityActions = useMemo(() => {
@@ -525,6 +541,46 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
           ) : null}
         </View>
       )}
+
+      {/* Quoted post. Hidden from accessibility because the card is a single
+          element whose label already reads the quote, in the order a listener
+          needs it. */}
+      {!bodyHidden && actualPost.quote ? (
+        <View
+          style={[styles.quote, { borderColor: theme.border, backgroundColor: theme.background }]}
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+        >
+          {quotedPost ? (
+            <>
+              <Text
+                style={[styles.quoteAuthor, { color: theme.textSecondary }]}
+                numberOfLines={1}
+                accessible={false}
+              >
+                {quotedPost.account.displayName?.trim() || quotedPost.account.username}
+                {' '}@{quotedPost.account.acct}
+              </Text>
+              {quotedPost.spoilerText?.trim() ? (
+                <Text style={[styles.quoteContent, { color: theme.textSecondary }]} accessible={false}>
+                  Content warning: {quotedPost.spoilerText.trim()}
+                </Text>
+              ) : (
+                <EmojiText
+                  text={stripHtml(quotedPost.content ?? '')}
+                  emojis={quotedPost.emojis}
+                  style={[styles.quoteContent, { color: theme.text }]}
+                  size={14}
+                />
+              )}
+            </>
+          ) : (
+            <Text style={[styles.quoteContent, { color: theme.textSecondary }]} accessible={false}>
+              {describeQuoteState(actualPost.quote.state)}
+            </Text>
+          )}
+        </View>
+      ) : null}
 
       {/* Link preview */}
       {!bodyHidden && card && card.url ? (
@@ -875,6 +931,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden',
   },
+  quote: {
+    marginTop: 10,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    gap: 4,
+  },
+  quoteAuthor: { fontSize: 13, fontWeight: '600' },
+  quoteContent: { fontSize: 14, lineHeight: 20 },
   cardImage: { width: '100%', height: 150 },
   cardText: { padding: 12, gap: 3 },
   cardProvider: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },

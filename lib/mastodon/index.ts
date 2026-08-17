@@ -58,6 +58,12 @@ export {
 // HTML
 export { stripHtml } from './html';
 
+// Quote posts
+export { buildQuoteLabel, type QuoteLabel } from './quoteLabel';
+
+// Spoken labels
+export { joinSpokenParts } from './speech';
+
 // Status length
 export { countStatusCharacters, countableText } from './statusLength';
 

@@ -1,6 +1,6 @@
 import { get, post, put, del, getPaginated, type PageCursor } from '../client';
 import { mapMediaAttachment } from '../mappers';
-import type { MastodonMediaAttachment } from '@/types/mastodon';
+import type { MastodonMediaAttachment, QuoteApprovalPolicy } from '@/types/mastodon';
 import type { PostVisibility } from './statuses';
 
 /**
@@ -61,6 +61,8 @@ export interface SchedulePostOptions {
   sensitive?: boolean;
   spoilerText?: string;
   idempotencyKey?: string;
+  quotedStatusId?: string;
+  quoteApprovalPolicy?: QuoteApprovalPolicy;
 }
 
 /**
@@ -86,6 +88,8 @@ export async function schedulePost(
   if (options.visibility) body.visibility = options.visibility;
   if (options.sensitive) body.sensitive = options.sensitive;
   if (options.spoilerText) body.spoiler_text = options.spoilerText;
+  if (options.quotedStatusId) body.quoted_status_id = options.quotedStatusId;
+  if (options.quoteApprovalPolicy) body.quote_approval_policy = options.quoteApprovalPolicy;
 
   const headers = options.idempotencyKey
     ? { 'Idempotency-Key': options.idempotencyKey }

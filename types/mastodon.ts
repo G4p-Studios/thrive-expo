@@ -41,6 +41,38 @@ export interface MastodonMention {
   url: string;
 }
 
+/**
+ * Why a quote is or is not showing.
+ *
+ * Only `accepted` carries the quoted post. Every other state means there is
+ * nothing to render, and each needs different wording — "waiting for approval"
+ * and "you blocked this account" are not the same thing to a reader.
+ */
+export type QuoteState =
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'revoked'
+  | 'deleted'
+  | 'unauthorized'
+  | 'blocked_account'
+  | 'blocked_domain'
+  | 'muted_account';
+
+export interface MastodonQuote {
+  state: QuoteState;
+  /** Only populated when `state` is `accepted`. */
+  quotedStatus?: MastodonPost;
+  /**
+   * Set instead of `quotedStatus` on a nested quote, where the server sends a
+   * shallow reference so a chain of quotes cannot recurse without end.
+   */
+  quotedStatusId?: string;
+}
+
+/** Who is allowed to quote a post. */
+export type QuoteApprovalPolicy = 'public' | 'followers' | 'nobody';
+
 export interface MastodonPost {
   id: string;
   uri?: string;
@@ -70,6 +102,8 @@ export interface MastodonPost {
   mentions?: MastodonMention[];
   tags?: any[];
   emojis?: MastodonEmoji[];
+  /** The post this one quotes. Absent on servers older than Mastodon 4.4. */
+  quote?: MastodonQuote;
 }
 
 export interface MastodonList {

@@ -15,6 +15,7 @@ import type {
   MastodonNotification,
   MastodonList,
   MastodonRelationship,
+  MastodonQuote,
   SearchResponse,
 } from '@/types/mastodon';
 
@@ -190,6 +191,35 @@ export function mapSuggestion(raw: any, instanceUrl: string = ''): MastodonSugge
 /**
  * Map Mastodon API status/post response to app type
  */
+/**
+ * Map the quote on a post.
+ *
+ * Nested quotes arrive shallow — an id in place of the post — so a chain of
+ * quotes cannot recurse without end. Both shapes come through here, and the
+ * caller distinguishes them by which field is set.
+ */
+export function mapQuote(raw: any, instanceUrl: string = ''): MastodonQuote {
+  return {
+    // Unknown states are treated as pending rather than accepted: showing
+    // nothing is recoverable, showing a quote the author revoked is not.
+    state: QUOTE_STATES.has(raw?.state) ? raw.state : 'pending',
+    quotedStatus: raw?.quoted_status ? mapPost(raw.quoted_status, instanceUrl) : undefined,
+    quotedStatusId: raw?.quoted_status_id ? String(raw.quoted_status_id) : undefined,
+  };
+}
+
+const QUOTE_STATES = new Set<string>([
+  'pending',
+  'accepted',
+  'rejected',
+  'revoked',
+  'deleted',
+  'unauthorized',
+  'blocked_account',
+  'blocked_domain',
+  'muted_account',
+]);
+
 export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
   return {
     id: raw.id,
@@ -219,6 +249,7 @@ export function mapPost(raw: any, instanceUrl: string = ''): MastodonPost {
     mentions: (raw.mentions || []).map(mapMention),
     tags: raw.tags,
     emojis: (raw.emojis || []).map(mapEmoji),
+    quote: raw.quote ? mapQuote(raw.quote, instanceUrl) : undefined,
   };
 }
 
