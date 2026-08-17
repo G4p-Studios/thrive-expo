@@ -240,6 +240,12 @@ export interface MastodonInstanceConfig {
   videoSizeLimit: number;
   /** The server's rules, offered when reporting a violation. */
   rules: MastodonInstanceRule[];
+  /**
+   * Base URL for the streaming WebSocket. Often the same host as the API, but
+   * larger servers run it separately, so it must be discovered rather than
+   * assumed.
+   */
+  streamingUrl: string | null;
 }
 
 export interface MastodonEmoji {

@@ -29,6 +29,7 @@ import {
   unreblog,
   bookmark,
   unbookmark,
+  useTimelineStream,
 } from '@/lib/mastodon';
 
 export default function HomeScreen() {
@@ -118,6 +119,28 @@ export default function HomeScreen() {
       setLoadingMore(false);
     }
   }, []);
+
+  // Live updates. The sound is played here rather than in the refresh path
+  // because a streamed post is the real "something new arrived" moment.
+  useTimelineStream('user', {
+    enabled: isConnected,
+    onUpdate: (post) => {
+      setPosts((prev) => {
+        // The server echoes back your own post too, and a reconnect can replay
+        // one already on screen, so ignore anything already known.
+        if (prev.some((p) => p.id === post.id)) return prev;
+        return [post, ...prev];
+      });
+      newestPostIdRef.current = post.id;
+      playInAppSound('newPost');
+    },
+    onDelete: (statusId) => {
+      setPosts((prev) => prev.filter((p) => p.id !== statusId));
+    },
+    onStatusUpdate: (post) => {
+      setPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)));
+    },
+  });
 
   const handleCompose = () => {
     console.log('User tapped compose button');

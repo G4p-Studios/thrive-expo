@@ -42,6 +42,10 @@ export {
   getReplyTarget,
 } from './mentions';
 
+// Streaming
+export { MastodonStream, type StreamName, type StreamHandlers } from './streaming';
+export { useTimelineStream } from './useTimelineStream';
+
 // Current account
 export {
   primeCurrentAccount,

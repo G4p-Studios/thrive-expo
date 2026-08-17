@@ -18,6 +18,7 @@ export const DEFAULT_INSTANCE_CONFIG: MastodonInstanceConfig = {
   imageSizeLimit: 16777216,
   videoSizeLimit: 103809024,
   rules: [],
+  streamingUrl: null,
 };
 
 function toPositiveInt(value: unknown, fallback: number): number {
@@ -46,6 +47,7 @@ export function mapInstanceConfig(raw: any): MastodonInstanceConfig {
     videoSizeLimit: toPositiveInt(media.video_size_limit, d.videoSizeLimit),
     // `rules` sits at the top level of the Instance entity, not under
     // `configuration`. Reporting a rule violation needs these.
+    streamingUrl: raw?.configuration?.urls?.streaming ?? null,
     rules: Array.isArray(raw?.rules)
       ? raw.rules
           .filter((rule: any) => rule && rule.id != null)
