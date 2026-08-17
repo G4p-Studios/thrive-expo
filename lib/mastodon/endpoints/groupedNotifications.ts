@@ -1,8 +1,16 @@
-import { get, post, getPaginated, type PageCursor } from '../client';
+import { get, post, getPaginated, MastodonAPIError, type PageCursor } from '../client';
 import { mapAccount, mapPost } from '../mappers';
 import { getInstanceUrl } from '../storage';
-import type { MastodonAccount, MastodonPost } from '@/types/mastodon';
-import type { NotificationFilter } from './notifications';
+import type {
+  MastodonAccount,
+  MastodonNotification,
+  MastodonPost,
+} from '@/types/mastodon';
+import {
+  getNotifications,
+  dismissNotification,
+  type NotificationFilter,
+} from './notifications';
 
 /**
  * A run of notifications the server has collapsed into one.
@@ -116,16 +124,67 @@ export async function getGroupedNotifications(
 }
 
 /**
+ * Present one ungrouped notification as a group of one.
+ *
+ * Lets the screen keep a single render path on servers that cannot group,
+ * rather than branching on server version everywhere a notification is drawn.
+ * The id doubles as the group key, which is what the group-scoped calls fall
+ * back to using.
+ */
+function notificationAsGroup(notification: MastodonNotification): NotificationGroup {
+  return {
+    groupKey: notification.id,
+    notificationsCount: 1,
+    type: notification.type,
+    createdAt: notification.createdAt,
+    accounts: [notification.account],
+    status: notification.status,
+    mostRecentNotificationId: notification.id,
+  };
+}
+
+/**
+ * Grouped notifications, falling back to the ungrouped list on older servers.
+ *
+ * Grouping arrived in Mastodon 4.3. Anything older answers 404, which means
+ * "this server cannot group" rather than "something went wrong" — so it drops
+ * to `/api/v1/notifications` and shapes the result the same way. A 404 is the
+ * only error swallowed; everything else still reaches the caller.
+ */
+export async function getNotificationGroups(
+  cursor?: PageCursor | null,
+  options: GroupedNotificationOptions = {}
+): Promise<GroupedNotificationsResponse & { grouped: boolean }> {
+  try {
+    const result = await getGroupedNotifications(cursor, options);
+    return { ...result, grouped: true };
+  } catch (error) {
+    if (!(error instanceof MastodonAPIError) || error.status !== 404) throw error;
+
+    const { notifications, next } = await getNotifications(cursor ?? null, options);
+    return { groups: notifications.map(notificationAsGroup), next, grouped: false };
+  }
+}
+
+/**
  * Dismiss a whole group at once.
  *
  * Dismissing the notifications one by one would take as many requests as there
  * are notifications in the group — which the group exists precisely to hide.
  */
 export async function dismissNotificationGroup(groupKey: string): Promise<void> {
-  await post<any>(
-    `/api/v2/notifications/${encodeURIComponent(groupKey)}/dismiss`,
-    {}
-  );
+  try {
+    await post<any>(
+      `/api/v2/notifications/${encodeURIComponent(groupKey)}/dismiss`,
+      {}
+    );
+  } catch (error) {
+    if (!(error instanceof MastodonAPIError) || error.status !== 404) throw error;
+
+    // On a server that cannot group, the key is the notification's own id —
+    // see `notificationAsGroup` — so the v1 dismiss takes it unchanged.
+    await dismissNotification(groupKey);
+  }
 }
 
 /**

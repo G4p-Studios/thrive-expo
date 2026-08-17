@@ -1,5 +1,5 @@
 
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import {
   View,
   Text,
@@ -15,9 +15,17 @@ import {
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MastodonNotification } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
-import { getNotifications, clearNotifications } from '@/lib/mastodon';
+import {
+  getNotificationGroups,
+  dismissNotificationGroup,
+  clearNotifications,
+  describeNotificationGroup,
+  buildNotificationGroupLabel,
+  stripHtml,
+  type NotificationGroup,
+  type PageCursor,
+} from '@/lib/mastodon';
 
 // Helper to resolve image sources
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -26,45 +34,51 @@ function resolveImageSource(source: string | number | ImageSourcePropType | unde
   return source as ImageSourcePropType;
 }
 
+/**
+ * Dismissing is the only per-row action, and the card is a single
+ * accessibility element, so it is offered as a custom action rather than as a
+ * button VoiceOver would have to be swiped into.
+ */
+const DISMISS_ACTION = [{ name: 'dismiss', label: 'Dismiss' }];
+
 export default function NotificationsScreen() {
   const colorScheme = useColorScheme();
-  const [notifications, setNotifications] = useState<MastodonNotification[]>([]);
+  const [groups, setGroups] = useState<NotificationGroup[]>([]);
+  const [cursor, setCursor] = useState<PageCursor | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [clearModalVisible, setClearModalVisible] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
 
-  useEffect(() => {
-    console.log('NotificationsScreen mounted, loading notifications');
-    loadNotifications();
-  }, []);
-
-  const loadNotifications = useCallback(async (maxId?: string) => {
+  const loadNotifications = useCallback(async (next?: PageCursor | null) => {
     try {
-      console.log('Loading notifications', maxId ? `with maxId: ${maxId}` : '');
-      if (!maxId) {
-        setLoading(true);
-        setHasMore(true);
-      } else {
+      console.log('Loading notifications', next ? 'with cursor' : '');
+      if (next) {
         setLoadingMore(true);
-      }
-      const response = await getNotifications(maxId);
-      console.log(`Loaded ${response.notifications.length} notifications`);
-
-      if (response.notifications.length === 0) {
-        setHasMore(false);
-      }
-
-      if (maxId) {
-        setNotifications((prev) => [...prev, ...response.notifications]);
       } else {
-        setNotifications(response.notifications);
+        setLoading(true);
+      }
+
+      const response = await getNotificationGroups(next ?? null);
+      console.log(
+        `Loaded ${response.groups.length} notification groups`,
+        response.grouped ? '(grouped)' : '(server cannot group)'
+      );
+
+      // The Link header is the authority on whether there is more: an empty
+      // page can still be followed by a full one once filtered notifications
+      // are skipped server-side.
+      setCursor(response.next);
+
+      if (next) {
+        setGroups((prev) => [...prev, ...response.groups]);
+      } else {
+        setGroups(response.groups);
       }
     } catch (error: any) {
       console.error('Failed to load notifications:', error);
@@ -77,6 +91,11 @@ export default function NotificationsScreen() {
     }
   }, []);
 
+  useEffect(() => {
+    console.log('NotificationsScreen mounted, loading notifications');
+    loadNotifications();
+  }, [loadNotifications]);
+
   const handleClearAll = async () => {
     setClearModalVisible(false);
     setLoading(true);
@@ -85,7 +104,8 @@ export default function NotificationsScreen() {
       console.log('Clearing all notifications');
       await clearNotifications();
       console.log('Notifications cleared successfully');
-      setNotifications([]);
+      setGroups([]);
+      setCursor(null);
     } catch (error: any) {
       console.error('Failed to clear notifications:', error);
       setErrorMessage(error.message || 'Failed to clear notifications');
@@ -94,6 +114,52 @@ export default function NotificationsScreen() {
       setLoading(false);
     }
   };
+
+  /**
+   * Remove the row straight away, then tell the server.
+   *
+   * Waiting for the round trip would leave a row that has visibly been
+   * dismissed still sitting there. If the call fails it goes back, so the list
+   * never quietly disagrees with the server.
+   */
+  const handleDismiss = useCallback(async (group: NotificationGroup) => {
+    let removedFrom = -1;
+
+    setGroups((prev) => {
+      removedFrom = prev.findIndex((g) => g.groupKey === group.groupKey);
+      return prev.filter((g) => g.groupKey !== group.groupKey);
+    });
+
+    try {
+      await dismissNotificationGroup(group.groupKey);
+    } catch (error: any) {
+      console.error('Failed to dismiss notification:', error);
+      // Put it back where it was, not at the end — a notification that
+      // reappears somewhere else reads as a new one.
+      setGroups((prev) => {
+        if (prev.some((g) => g.groupKey === group.groupKey)) return prev;
+        const restored = [...prev];
+        restored.splice(removedFrom < 0 ? restored.length : removedFrom, 0, group);
+        return restored;
+      });
+      setErrorMessage(error.message || 'Could not dismiss that notification');
+      setErrorModalVisible(true);
+    }
+  }, []);
+
+  /**
+   * Open what the notification is about: the post where there is one, the
+   * person otherwise.
+   */
+  const handleOpen = useCallback((group: NotificationGroup) => {
+    if (group.status) {
+      router.push(`/post/${group.status.id}`);
+    } else if (group.accounts.length > 0) {
+      // Cast matches the rest of the app: the generated route types don't
+      // cover this dynamic segment.
+      router.push(`/account/${group.accounts[0].id}` as any);
+    }
+  }, []);
 
   // `as const` keeps the Material icon names as literals so they satisfy
   // IconSymbol's glyph-name union instead of widening to `string`.
@@ -131,27 +197,8 @@ export default function NotificationsScreen() {
     }
   };
 
-  const getNotificationText = (notification: MastodonNotification) => {
-    const displayName = notification.account.displayName || notification.account.username;
-    switch (notification.type) {
-      case 'mention':
-        return `${displayName} mentioned you`;
-      case 'reblog':
-        return `${displayName} boosted your post`;
-      case 'favourite':
-        return `${displayName} liked your post`;
-      case 'follow':
-        return `${displayName} followed you`;
-      case 'poll':
-        return `A poll you voted in has ended`;
-      case 'status':
-        return `${displayName} posted`;
-      default:
-        return `${displayName} interacted with you`;
-    }
-  };
-
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -166,54 +213,113 @@ export default function NotificationsScreen() {
     return date.toLocaleDateString();
   };
 
-  const renderNotification = ({ item }: { item: MastodonNotification }) => {
+  const renderNotification = ({ item }: { item: NotificationGroup }) => {
     const icon = getNotificationIcon(item.type);
     const color = getNotificationColor(item.type);
-    const text = getNotificationText(item);
+    const summary = describeNotificationGroup(item);
     const timeAgo = formatDate(item.createdAt);
 
+    // Faces carry the "who" faster than the sentence does, but past three they
+    // stop being recognisable and start being clutter.
+    const avatars = item.accounts.slice(0, 3);
+
     return (
-      <TouchableOpacity
-        style={[styles.notificationCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-        accessible={true}
-        accessibilityRole="button"
-        accessibilityLabel={`${text}. ${timeAgo}`}
-      >
-        <View style={styles.notificationHeader}>
-          <Image
-            source={resolveImageSource(item.account.avatar)}
-            style={styles.avatar}
-            accessibilityLabel={`${item.account.displayName || item.account.username}'s avatar`}
-          />
-          <View style={styles.notificationContent}>
-            <View style={styles.notificationTop}>
-              <IconSymbol
-                ios_icon_name={icon.ios}
-                android_material_icon_name={icon.android}
-                size={16}
-                color={color}
-                style={{ marginRight: 8 }}
-              />
-              <Text style={[styles.notificationText, { color: theme.text }]} numberOfLines={2}>
-                {text}
-              </Text>
+      <View style={styles.row}>
+        <TouchableOpacity
+          style={[
+            styles.notificationCard,
+            { backgroundColor: theme.card, borderColor: theme.border },
+          ]}
+          onPress={() => handleOpen(item)}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={buildNotificationGroupLabel(item, timeAgo)}
+          accessibilityHint={item.status ? 'Opens the post' : 'Opens the profile'}
+          accessibilityActions={DISMISS_ACTION}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === 'dismiss') handleDismiss(item);
+          }}
+        >
+          <View style={styles.notificationHeader}>
+            <View
+              style={styles.avatars}
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
+            >
+              {avatars.map((account, index) => (
+                <Image
+                  key={account.id}
+                  source={resolveImageSource(account.avatar)}
+                  style={[
+                    styles.avatar,
+                    index > 0 && styles.avatarStacked,
+                    { borderColor: theme.card },
+                  ]}
+                  accessible={false}
+                />
+              ))}
             </View>
-            <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
-              {timeAgo}
-            </Text>
-            {item.status && (
-              <Text style={[styles.statusPreview, { color: theme.textSecondary }]} numberOfLines={2}>
-                {item.status.content.replace(/<[^>]*>/g, '')}
+            <View style={styles.notificationContent} accessible={false}>
+              <View style={styles.notificationTop} accessible={false}>
+                <IconSymbol
+                  ios_icon_name={icon.ios}
+                  android_material_icon_name={icon.android}
+                  size={16}
+                  color={color}
+                  style={{ marginRight: 8 }}
+                  accessible={false}
+                />
+                <Text
+                  style={[styles.notificationText, { color: theme.text }]}
+                  numberOfLines={2}
+                  accessible={false}
+                >
+                  {summary}
+                </Text>
+              </View>
+              <Text
+                style={[styles.timestamp, { color: theme.textSecondary }]}
+                accessible={false}
+              >
+                {timeAgo}
               </Text>
-            )}
+              {item.status && (
+                <Text
+                  style={[styles.statusPreview, { color: theme.textSecondary }]}
+                  numberOfLines={2}
+                  accessible={false}
+                >
+                  {stripHtml(item.status.content ?? '')}
+                </Text>
+              )}
+            </View>
+
+            {/* The card is one accessibility element, so this is hidden from
+                the tree and reached through the Dismiss action instead —
+                exposing it as well would read the row twice. */}
+            <TouchableOpacity
+              style={styles.dismissButton}
+              onPress={() => handleDismiss(item)}
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
+              hitSlop={8}
+            >
+              <IconSymbol
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
+                size={16}
+                color={theme.textSecondary}
+                accessible={false}
+              />
+            </TouchableOpacity>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
     );
   };
 
   const headerRight = useCallback(() => {
-    if (notifications.length === 0) return null;
+    if (groups.length === 0) return null;
     return (
       <TouchableOpacity
         onPress={() => setClearModalVisible(true)}
@@ -225,15 +331,13 @@ export default function NotificationsScreen() {
         <Text style={[styles.clearButtonText, { color: theme.primary }]}>Clear All</Text>
       </TouchableOpacity>
     );
-  }, [notifications.length, theme.primary]);
+  }, [groups.length, theme.primary]);
 
   const handleLoadMore = useCallback(() => {
-    if (loadingMore || !hasMore || notifications.length === 0) return;
-    const lastNotification = notifications[notifications.length - 1];
-    if (lastNotification) {
-      loadNotifications(lastNotification.id);
-    }
-  }, [loadingMore, hasMore, notifications, loadNotifications]);
+    // No cursor means the server said this is the end of the collection.
+    if (loadingMore || loading || !cursor) return;
+    loadNotifications(cursor);
+  }, [loadingMore, loading, cursor, loadNotifications]);
 
   const footerComponent = useMemo(() => {
     if (!loadingMore) return null;
@@ -271,8 +375,8 @@ export default function NotificationsScreen() {
       />
 
       <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id}
+        data={groups}
+        keyExtractor={(item) => item.groupKey}
         renderItem={renderNotification}
         refreshControl={
           <RefreshControl
@@ -299,7 +403,7 @@ export default function NotificationsScreen() {
             </Text>
           </View>
         }
-        contentContainerStyle={notifications.length === 0 ? styles.emptyListContent : undefined}
+        contentContainerStyle={groups.length === 0 ? styles.emptyListContent : undefined}
         ListFooterComponent={footerComponent}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
@@ -408,21 +512,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  row: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+  },
   notificationCard: {
     borderRadius: 12,
     padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
     borderWidth: 1,
   },
   notificationHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  avatars: {
+    flexDirection: 'row',
+    marginRight: 12,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    marginRight: 12,
+  },
+  // Overlapped rather than in a row, so three faces cost barely more width
+  // than one and the text keeps its space.
+  avatarStacked: {
+    marginLeft: -18,
+    borderWidth: 2,
   },
   notificationContent: {
     flex: 1,
@@ -444,6 +560,10 @@ const styles = StyleSheet.create({
   statusPreview: {
     fontSize: 14,
     marginTop: 4,
+  },
+  dismissButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   emptyContainer: {
     flex: 1,

@@ -63,6 +63,11 @@ export { buildQuoteLabel, type QuoteLabel } from './quoteLabel';
 
 // Spoken labels
 export { joinSpokenParts } from './speech';
+export {
+  describeNotificationGroup,
+  describeAccounts,
+  buildNotificationGroupLabel,
+} from './notificationGroupLabel';
 
 // Status length
 export { countStatusCharacters, countableText } from './statusLength';
