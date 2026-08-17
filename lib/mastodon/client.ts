@@ -4,10 +4,50 @@ export class MastodonAPIError extends Error {
   constructor(
     public status: number,
     public statusText: string,
-    public body: string
+    public body: string,
+    /** Seconds until the rate limit resets, when the server said so. */
+    public retryAfterSeconds?: number
   ) {
-    super(`Mastodon API error: ${status} ${statusText}`);
+    super(MastodonAPIError.describe(status, statusText, body, retryAfterSeconds));
     this.name = 'MastodonAPIError';
+  }
+
+  /**
+   * A message worth putting in front of someone.
+   *
+   * Mastodon returns a JSON body with an `error` field explaining what went
+   * wrong; surfacing "Mastodon API error: 422" instead of "Validation failed"
+   * helps nobody.
+   */
+  private static describe(
+    status: number,
+    statusText: string,
+    body: string,
+    retryAfterSeconds?: number
+  ): string {
+    if (status === 429) {
+      return retryAfterSeconds
+        ? `Too many requests. Try again in ${Math.ceil(retryAfterSeconds / 60)} minute${
+            retryAfterSeconds > 60 ? 's' : ''
+          }.`
+        : 'Too many requests. Wait a moment and try again.';
+    }
+
+    try {
+      const parsed = JSON.parse(body);
+      if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+        return parsed.error;
+      }
+    } catch {
+      // Not JSON; fall through.
+    }
+
+    return `Mastodon API error: ${status} ${statusText}`;
+  }
+
+  /** Whether waiting and retrying could plausibly succeed. */
+  get isRateLimited(): boolean {
+    return this.status === 429;
   }
 }
 
@@ -169,7 +209,9 @@ export async function mastodonFetchRaw<T>(
   console.log(`[Mastodon] ${method} ${endpoint}`);
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    // Only describe a body that exists. Sending this on a GET is harmless
+    // against Mastodon but is a lie about the request.
+    ...(body ? { 'Content-Type': 'application/json' } : {}),
     ...(fetchOptions.headers as Record<string, string>),
   };
 
@@ -182,7 +224,26 @@ export async function mastodonFetchRaw<T>(
   if (!response.ok) {
     const text = await response.text();
     console.error(`[Mastodon] ${response.status} ${endpoint}:`, text);
-    throw new MastodonAPIError(response.status, response.statusText, text);
+
+    // Mastodon reports rate limits with X-RateLimit-Reset (an ISO timestamp)
+    // and the standard Retry-After. Passing that through lets callers say when
+    // to come back rather than just failing.
+    let retryAfterSeconds: number | undefined;
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('retry-after');
+      const reset = response.headers.get('x-ratelimit-reset');
+
+      if (retryAfter && Number.isFinite(Number(retryAfter))) {
+        retryAfterSeconds = Number(retryAfter);
+      } else if (reset) {
+        const resetAt = new Date(reset).getTime();
+        if (Number.isFinite(resetAt)) {
+          retryAfterSeconds = Math.max(0, Math.round((resetAt - Date.now()) / 1000));
+        }
+      }
+    }
+
+    throw new MastodonAPIError(response.status, response.statusText, text, retryAfterSeconds);
   }
 
   // Handle empty responses (204 No Content)

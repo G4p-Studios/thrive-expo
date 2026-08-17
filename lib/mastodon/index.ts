@@ -77,6 +77,7 @@ export * from './endpoints/reports';
 export * from './endpoints/domainBlocks';
 export * from './endpoints/filters';
 export * from './endpoints/conversations';
+export * from './endpoints/markers';
 export * from './endpoints/discovery';
 export * from './endpoints/preferences';
 export * from './endpoints/push';
