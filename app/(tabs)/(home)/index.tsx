@@ -17,6 +17,7 @@ import PostCard from '@/components/PostCard';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
+import { playInAppSound } from '@/lib/notifications';
 import {
   getReplyTarget,
   isAuthenticated,
@@ -43,6 +44,9 @@ export default function HomeScreen() {
   const [replyToPost, setReplyToPost] = useState<MastodonPost | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  // Newest post id at the last refresh, used to tell a genuinely new arrival
+  // from a first load or a page of older posts.
+  const newestPostIdRef = React.useRef<string | undefined>(undefined);
 
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
@@ -91,8 +95,17 @@ export default function HomeScreen() {
       }
 
       if (maxId) {
+        // Pagination fetches older posts, so the newest is unchanged.
         setPosts((prev) => [...prev, ...response.posts]);
       } else {
+        // Sound only for a post that genuinely arrived: not the first load,
+        // where everything is new, and not pagination. Tracked in a ref rather
+        // than compared inside the state updater, which React may run twice.
+        const newestNow = response.posts[0]?.id;
+        if (newestPostIdRef.current && newestNow && newestNow !== newestPostIdRef.current) {
+          playInAppSound('newPost');
+        }
+        newestPostIdRef.current = newestNow;
         setPosts(response.posts);
       }
     } catch (error: any) {

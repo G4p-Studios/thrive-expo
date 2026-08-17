@@ -20,6 +20,7 @@ import { MastodonPoll, MastodonPost } from '@/types/mastodon';
 import { IconSymbol } from '@/components/IconSymbol';
 import MediaPlayer from '@/components/MediaPlayer';
 import EmojiText, { stripEmojiColons } from '@/components/EmojiText';
+import { playInAppSound } from '@/lib/notifications';
 
 // Helper to resolve image sources
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -60,11 +61,16 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
     onReply(post.id);
   }, [onReply, post.id]);
 
+  // Sounds fire on the tap rather than on the server's reply: these actions are
+  // optimistic in the UI, so waiting would put the sound out of step with what
+  // the reader just saw happen.
   const handleReblog = useCallback(() => {
+    if (!reblogged) playInAppSound('boost');
     onReblog(post.id, reblogged || false);
   }, [onReblog, post.id, reblogged]);
 
   const handleFavourite = useCallback(() => {
+    playInAppSound(favourited ? 'unfavourite' : 'favourite');
     onFavourite(post.id, favourited || false);
   }, [onFavourite, post.id, favourited]);
 
@@ -140,6 +146,7 @@ function PostCard({ post, onReply, onReblog, onFavourite, onBookmark, onPress, t
         const updated = await voteOnPoll(poll.id, choices);
         setVotedPoll(updated);
         setPollSelection([]);
+        playInAppSound('vote');
         AccessibilityInfo.announceForAccessibility('Vote submitted');
       } catch (error: any) {
         console.error('Failed to vote on poll:', error);

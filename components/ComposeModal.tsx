@@ -41,6 +41,7 @@ import {
   MastodonPost,
 } from '@/types/mastodon';
 import AudioRecorder from '@/components/AudioRecorder';
+import { playInAppSound } from '@/lib/notifications';
 
 /** Everything the composer collects alongside the post body. */
 export interface ComposeSubmission {
@@ -326,6 +327,7 @@ export default function ComposeModal({
         idempotencyKey: idempotencyKeyRef.current,
       });
 
+      playInAppSound(replyToPost ? 'sendReply' : 'sendPost');
       resetComposer();
       onClose();
     } catch (error: any) {
